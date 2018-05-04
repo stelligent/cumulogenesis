@@ -3,9 +3,7 @@ Integration tests for model loading/validation/dumping to/from config
 '''
 import unittest
 import pyaml
-#from pprint import pprint
 from deepdiff import DeepDiff
-#from unittest import mock
 import cumulogenesis.loaders.config as config_loader
 from cumulogenesis import helpers
 from cumulogenesis import exceptions
@@ -50,7 +48,6 @@ class TestConfigModel(unittest.TestCase):
         rendered_config = config_loader.dump_organization_to_config(org_model, loader_version)
         print("\nRendered config:\n%s" % pyaml.dump(rendered_config))
         config_diff = DeepDiff(dict(config), dict(rendered_config), ignore_order=True)
-        #print("Expected config:\n%s" % pyaml.dump(config))
         print("Difference between dicts:")
         helpers.pretty_print(config_diff)
         assert dict(rendered_config) == config
@@ -67,9 +64,12 @@ class TestConfigModel(unittest.TestCase):
         loader_version = '2018-05-04'
         fixture_name = 'invalid-model-orphaned-account-%s' % loader_version
         config = self._load_yaml_config_fixture(fixture_name)
+        expected_hierarchy = self._load_yaml_hierarchy_fixture(fixture_name)
         org_model = config_loader.load_organization_from_config(config)
         problems = org_model.validate()
         expected_problems = {"accounts": {"orphaned-account": ["orphaned"]}}
         assert expected_problems == problems
+        hierarchy = org_model.get_orgunit_hierarchy()
+        assert hierarchy == expected_hierarchy
         with self.assertRaises(exceptions.InvalidOrganizationException):
             config_loader.dump_organization_to_config(org_model, loader_version)
