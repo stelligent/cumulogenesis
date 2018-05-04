@@ -89,6 +89,7 @@ class DefaultConfigLoader:
             organization.orgunits = self._load_orgunits(config['orgunits'])
         if 'stacks' in config:
             organization.stacks = self._load_stacks(config['stacks'])
+        organization.regenerate_groups()
         return organization
 
     @staticmethod

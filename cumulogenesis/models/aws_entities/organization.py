@@ -100,52 +100,13 @@ class Organization(AwsEntity):
         '''
         return self.orgunits.get(orgunit_name, None)
 
-    def get_account(self, account_name):
-        '''
-        Looks up a single account by name and returns the Account object.
-        Returns None if the account is not found.
-        '''
-        return self.accounts.get(account_name, None)
-
-    def get_stackset(self, stackset_name):
-        '''
-        Looks up a single stackset by name and returns the StackSet object.
-        Returns None if the stackset is not found.
-        '''
-        return self.stacks.get(stackset_name, None)
-
-    def get_policy(self, policy_name):
-        '''
-        Looks up a single service control policy by name and returns the Policy object.
-        Returns None if the policy is not found.
-        '''
-        return self.policies.get(policy_name, None)
-
-    def get_group(self, group_name):
-        '''
-        Looks up a single group by name and returns a dict of its member stacks and accounts.
-        Returns None if the group does not exist.
-        '''
-        if self.groups is None:
-            self.regenerate_groups()
-        return self.groups.get(group_name, None)
-
-    def get_groups(self):
-        '''
-        Returns groups with their member accounts and stacks.
-        Returns an empty dict if no groups are found.
-        '''
-        if self.groups is None:
-            self.regenerate_groups()
-        return self.groups
-
     def _initialize_account_parent_references(self):
         for account_name in self.accounts:
             self.accounts[account_name].parent_references = []
 
     def _validate_orgunit(self, orgunit_name):
         problems = []
-        orgunit = self.get_orgunit(orgunit_name)
+        orgunit = self.orgunits[orgunit_name]
         if orgunit.parent_orgunit:
             if not orgunit.parent_orgunit in self.orgunits:
                 problems.append('orphaned from parent %s' % orgunit.parent_orgunit)
@@ -170,7 +131,7 @@ class Organization(AwsEntity):
 
     def _validate_account(self, account_name):
         problems = []
-        account = self.get_account(account_name)
+        account = self.accounts[account_name]
         if not account.parent_references:
             problems.append('orphaned')
         elif len(account.parent_references) > 1:
@@ -188,7 +149,7 @@ class Organization(AwsEntity):
 
     def _validate_stackset(self, stackset_name):
         problems = []
-        stackset = self.get_stackset(stackset_name)
+        stackset = self.stacks[stackset_name]
         for account in stackset.accounts:
             if not account['name'] in self.accounts:
                 problems.append('references missing account %s' % account['name'])
@@ -214,7 +175,7 @@ class Organization(AwsEntity):
 
     def _validate_group(self, group_name):
         problems = []
-        group = self.get_group(group_name)
+        group = self.groups[group_name]
         if not 'accounts' in group or not group['accounts']:
             problems.append('has no accounts listed')
         if not 'stacks' in group or not group['stacks']:
@@ -222,8 +183,8 @@ class Organization(AwsEntity):
 
     def _validate_groups(self):
         problems = {}
-        groups = self.get_groups()
-        for group_name in groups:
+        self.regenerate_groups()
+        for group_name in self.groups:
             group_problems = self._validate_group(group_name)
             if group_problems:
                 problems[group_name] = group_problems
