@@ -9,37 +9,38 @@ from cumulogenesis.models.provisioner import Provisioner
 from cumulogenesis.log_handling import LOGGER as logger
 from cumulogenesis import exceptions
 
-class DefaultConfigLoader(object):
+class DefaultConfigLoader:
     '''
     Provides methods for loading organization models from config
     and dumping them back to the same config scheme.
     '''
+    _default_featureset = 'ALL'
+    _account_parameters = [{'name': 'name', 'type': str},
+                           {'name': 'owner', 'type': str},
+                           {'name': 'groups', 'type': list, 'optional': True},
+                           {'name': 'accountid', 'type': str, 'optional': True}]
+    _policy_parameters = [{'name': 'name', 'type': str},
+                          {'name': 'description', 'type': str},
+                          {'name': 'document', 'type': dict}]
+    _provisioner_parameters = [{'name': 'role', 'type': str, 'optional': True},
+                               {'name': 'type', 'type': str, 'optional': True}]
+    _policy_document_parameters = [{'name': 'location', 'type': str},
+                                   {'name': 'content', 'type': dict}]
+    _orgunit_parameters = [{'name': 'name', 'type': str},
+                           {'name': 'policies', 'type': list, 'optional': True},
+                           {'name': 'accounts', 'type': list, 'optional': True},
+                           {'name': 'orgunits', 'type': list, 'optional': True}]
+    _stack_parameters = [{'name': 'name', 'type': str},
+                         {'name': 'groups', 'type': list, 'optional': True},
+                         {'name': 'accounts', 'type': list, 'optional': True},
+                         {'name': 'orgunits', 'type': list, 'optional': True}]
+    _stack_target_parameters = [{'name': 'name', 'type': str},
+                                {'name': 'regions', 'type': list}]
+    _stack_template_parameters = [{'name': 'location', 'type': str},
+                                  {'name': 'content', 'type': dict}]
+
     def __init__(self):
-        self.config_version = '0.1'
-        self._default_featureset = 'ALL'
-        self._account_parameters = [{'name': 'name', 'type': str},
-                                    {'name': 'owner', 'type': str},
-                                    {'name': 'groups', 'type': list, 'optional': True},
-                                    {'name': 'accountid', 'type': str, 'optional': True}]
-        self._policy_parameters = [{'name': 'name', 'type': str},
-                                   {'name': 'description', 'type': str},
-                                   {'name': 'document', 'type': dict}]
-        self._provisioner_parameters = [{'name': 'role', 'type': str, 'optional': True},
-                                        {'name': 'type', 'type': str, 'optional': True}]
-        self._policy_document_parameters = [{'name': 'location', 'type': str},
-                                            {'name': 'content', 'type': dict}]
-        self._orgunit_parameters = [{'name': 'name', 'type': str},
-                                    {'name': 'policies', 'type': list, 'optional': True},
-                                    {'name': 'accounts', 'type': list, 'optional': True},
-                                    {'name': 'orgunits', 'type': list, 'optional': True}]
-        self._stack_parameters = [{'name': 'name', 'type': str},
-                                  {'name': 'groups', 'type': list, 'optional': True},
-                                  {'name': 'accounts', 'type': list, 'optional': True},
-                                  {'name': 'orgunits', 'type': list, 'optional': True}]
-        self._stack_target_parameters = [{'name': 'name', 'type': str},
-                                         {'name': 'regions', 'type': list}]
-        self._stack_template_parameters = [{'name': 'location', 'type': str},
-                                           {'name': 'content', 'type': dict}]
+        self.config_version = '2018-05-04'
 
     def dump_organization_to_config(self, organization):
         '''

@@ -1,3 +1,7 @@
+'''
+Provides AWS entity models
+'''
+
 from .account import Account
 from .organization import Organization
 from .orgunit import OrganizationalUnit

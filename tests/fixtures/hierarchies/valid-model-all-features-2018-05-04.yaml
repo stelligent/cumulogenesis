@@ -1,0 +1,12 @@
+ROOT_ACCOUNT:
+  orgunits:
+    'IAM Federation':
+      accounts:
+        - pre-existing-account
+    'The Foos':
+      accounts:
+        - foo-account
+      orgunits:
+        'The Bars':
+          accounts:
+            - bar-account

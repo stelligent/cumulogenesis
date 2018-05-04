@@ -1,4 +1,11 @@
-class AwsEntity(object):
+'''
+Provides AwsEntity
+'''
+
+class AwsEntity:
+    '''
+    Base class for AWS Entity models
+    '''
     def __init__(self):
         self.should_provision = None
         self.should_update = None

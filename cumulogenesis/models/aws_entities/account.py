@@ -1,6 +1,12 @@
+'''
+Provides Account
+'''
 from cumulogenesis.models.aws_entity import AwsEntity
 
 class Account(AwsEntity):
+    '''
+    Represents an AWS Account entity
+    '''
     def __init__(self, name, owner, groups=None, accountid=None):
         self.name = name
         self.owner = owner

@@ -1,7 +1,6 @@
 '''
-Provies the Organization AwsEntity model class
+Provides the Organization AwsEntity model class
 '''
-import copy
 from cumulogenesis.models.aws_entity import AwsEntity
 from cumulogenesis import exceptions
 
@@ -22,6 +21,123 @@ class Organization(AwsEntity):
         self.provisioner = None
         self.raw_config = None
         super(Organization).__init__()
+
+    def get_orgunit_hierarchy(self):
+        '''
+        Returns a dict representing the hierarchy of accounts and orgunits in the Organization model
+        '''
+        orgunit_graph = self._get_orgunit_graph()
+        orgunit_paths = []
+        orphaned_orgunits = []
+        # Map paths for each org unit through its parents to the root account
+        for orgunit in self.orgunits:
+            path = self._find_path(graph=orgunit_graph, start=orgunit, end='ROOT_ACCOUNT')
+            if not path:
+                orphaned_orgunits.append(orgunit)
+            else:
+                orgunit_paths.append(path[::-1])
+        orgunit_hierarchy = {}
+        # Turn paths into a nested dict hierarchy
+        for path in orgunit_paths:
+            self._append_path(orgunit_hierarchy, path)
+        # Add orphaned orgunits and accounts to the hierarchy as a separate root key
+        orphaned_accounts = self._find_orphaned_accounts()
+        if orphaned_accounts or orphaned_orgunits:
+            orgunit_hierarchy['ORPHANED'] = {}
+        if orphaned_accounts:
+            orgunit_hierarchy['ORPHANED']['accounts'] = orphaned_accounts
+        if orphaned_orgunits:
+            orgunit_hierarchy['ORPHANED']['orgunits'] = orphaned_orgunits
+        return orgunit_hierarchy
+
+    def raise_if_invalid(self):
+        '''
+        Raises cumulogenesis.exceptions.InvalidOrganizationException if any
+        issues are found with the organization's structure.
+        '''
+        problems = self.validate()
+        if problems:
+            raise exceptions.InvalidOrganizationException(problems)
+
+    def regenerate_groups(self):
+        '''
+        Rebuilds the groups dict from the current accounts and stacks attributes.
+        '''
+        self.groups = {}
+        for account in self.accounts.values():
+            for group in account.groups:
+                self._add_entity_to_group(group_name=group, entity_name=account.name,
+                                          entity_type='accounts')
+        for stack in self.stacks.values():
+            for group in stack.groups:
+                self._add_entity_to_group(group_name=group, entity_name=stack.name,
+                                          entity_type='stacks')
+
+    def validate(self):
+        '''
+        Inspects the organization's structure and returns a dict of problems.
+        If no problems are found, returns None
+        '''
+        problems = {}
+        orgunit_problems = self._validate_orgunits()
+        if orgunit_problems:
+            problems['orgunits'] = orgunit_problems
+        account_problems = self._validate_accounts()
+        if account_problems:
+            problems['accounts'] = account_problems
+        stack_problems = self._validate_stacksets()
+        if stack_problems:
+            problems['stacks'] = stack_problems
+        group_problems = self._validate_groups()
+        if group_problems:
+            problems['groups'] = group_problems
+        return problems
+
+    def get_orgunit(self, orgunit_name):
+        '''
+        Looks up a single orgunit by name and returns the OrganizationalUnit object.
+        Returns None if the orgunit is not found.
+        '''
+        return self.orgunits.get(orgunit_name, None)
+
+    def get_account(self, account_name):
+        '''
+        Looks up a single account by name and returns the Account object.
+        Returns None if the account is not found.
+        '''
+        return self.accounts.get(account_name, None)
+
+    def get_stackset(self, stackset_name):
+        '''
+        Looks up a single stackset by name and returns the StackSet object.
+        Returns None if the stackset is not found.
+        '''
+        return self.stacks.get(stackset_name, None)
+
+    def get_policy(self, policy_name):
+        '''
+        Looks up a single service control policy by name and returns the Policy object.
+        Returns None if the policy is not found.
+        '''
+        return self.policies.get(policy_name, None)
+
+    def get_group(self, group_name):
+        '''
+        Looks up a single group by name and returns a dict of its member stacks and accounts.
+        Returns None if the group does not exist.
+        '''
+        if self.groups is None:
+            self.regenerate_groups()
+        return self.groups.get(group_name, None)
+
+    def get_groups(self):
+        '''
+        Returns groups with their member accounts and stacks.
+        Returns an empty dict if no groups are found.
+        '''
+        if self.groups is None:
+            self.regenerate_groups()
+        return self.groups
 
     def _initialize_account_parent_references(self):
         for account_name in self.accounts:
@@ -113,33 +229,6 @@ class Organization(AwsEntity):
                 problems[group_name] = group_problems
         return problems
 
-    def get_orgunit(self, orgunit_name):
-        '''
-        Looks up a single orgunit by name and returns the OrganizationalUnit object.
-        Returns None if the orgunit is not found.
-        '''
-        return self.orgunits.get(orgunit_name, None)
-
-    def get_account(self, account_name):
-        '''
-        Looks up a single account by name and returns the Account object.
-        Returns None if the account is not found.
-        '''
-        return self.accounts.get(account_name, None)
-
-    def get_stackset(self, stackset_name):
-        '''
-        Looks up a single stackset by name and returns the StackSet object.
-        Returns None if the stackset is not found.
-        '''
-        return self.stacks.get(stackset_name, None)
-
-    def get_policy(self, policy_name):
-        '''
-        Looks up a single service control policy by name and returns the Policy object.
-        Returns None if the policy is not found.
-        '''
-        return self.policies.get(policy_name, None)
 
     def _add_entity_to_group(self, group_name, entity_name, entity_type):
         if not group_name in self.groups:
@@ -147,57 +236,6 @@ class Organization(AwsEntity):
         if not entity_type in self.groups[group_name]:
             self.groups[group_name][entity_type] = []
         self.groups[group_name][entity_type].append(entity_name)
-
-    def regenerate_groups(self):
-        '''
-        Rebuilds the groups dict from the current accounts and stacks attributes.
-        '''
-        self.groups = {}
-        for account in self.accounts.values():
-            for group in account.groups:
-                self._add_entity_to_group(group_name=group, entity_name=account.name,
-                                          entity_type='accounts')
-        for stack in self.stacks.values():
-            for group in stack.groups:
-                self._add_entity_to_group(group_name=group, entity_name=stack.name,
-                                          entity_type='stacks')
-    def get_group(self, group_name):
-        '''
-        Looks up a single group by name and returns a dict of its member stacks and accounts.
-        Returns None if the group does not exist.
-        '''
-        if self.groups is None:
-            self.regenerate_groups()
-        return self.groups.get(group_name, None)
-
-    def get_groups(self):
-        '''
-        Returns groups with their member accounts and stacks.
-        Returns an empty dict if no groups are found.
-        '''
-        if self.groups is None:
-            self.regenerate_groups()
-        return self.groups
-
-    def validate(self):
-        '''
-        Inspects the organization's structure and returns a dict of problems.
-        If no problems are found, returns None
-        '''
-        problems = {}
-        orgunit_problems = self._validate_orgunits()
-        if orgunit_problems:
-            problems['orgunits'] = orgunit_problems
-        account_problems = self._validate_accounts()
-        if account_problems:
-            problems['accounts'] = account_problems
-        stack_problems = self._validate_stacksets()
-        if stack_problems:
-            problems['stacks'] = stack_problems
-        group_problems = self._validate_groups()
-        if group_problems:
-            problems['groups'] = group_problems
-        return problems
 
     def _orgunits_to_graph(self):
         graph = {}
@@ -243,43 +281,8 @@ class Organization(AwsEntity):
     def _find_orphaned_accounts(self):
         orphaned_accounts = []
         for account in self.accounts.values():
+            # We specifically want to ensure that parent_references is 0 and not None
+            #pylint: disable=len-as-condition
             if len(account.parent_references) == 0:
                 orphaned_accounts.append(account.name)
         return orphaned_accounts
-
-    def get_orgunit_hierarchy(self):
-        '''
-        Returns a dict representing the hierarchy of accounts and orgunits in the Organization model
-        '''
-        orgunit_graph = self._get_orgunit_graph()
-        orgunit_paths = []
-        orphaned_orgunits = []
-        # Map paths for each org unit through its parents to the root account
-        for orgunit in self.orgunits:
-            path = self._find_path(graph=orgunit_graph, start=orgunit, end='ROOT_ACCOUNT')
-            if not path:
-                orphaned_orgunits.append(orgunit)
-            else:
-                orgunit_paths.append(path[::-1])
-        orgunit_hierarchy = {}
-        # Turn paths into a nested dict hierarchy
-        for path in orgunit_paths:
-            self._append_path(orgunit_hierarchy, path)
-        # Add orphaned orgunits and accounts to the hierarchy as a separate root key
-        orphaned_accounts = self._find_orphaned_accounts()
-        if orphaned_accounts or orphaned_orgunits:
-            orgunit_hierarchy['ORPHANED'] = {}
-        if orphaned_accounts:
-            orgunit_hierarchy['ORPHANED']['accounts'] = orphaned_accounts
-        if orphaned_orgunits:
-            orgunit_hierarchy['ORPHANED']['orgunits'] = orphaned_orgunits
-        return orgunit_hierarchy
-
-    def raise_if_invalid(self):
-        '''
-        Raises cumulogenesis.exceptions.InvalidOrganizationException if any
-        issues are found with the organization's structure.
-        '''
-        problems = self.validate()
-        if problems:
-            raise exceptions.InvalidOrganizationException(problems)

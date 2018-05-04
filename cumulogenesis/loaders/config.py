@@ -1,9 +1,13 @@
+'''
+Provides methods that load/dump models to/from the config format.
+Maps the loader used to the version provided.
+'''
 from cumulogenesis.loaders.config_loaders.default_config_loader import DefaultConfigLoader
 from cumulogenesis.log_handling import LOGGER as logger
 
 _CONFIG_VERSIONS_TO_LOADERS = {
     "default": DefaultConfigLoader,
-    "0.1": DefaultConfigLoader}
+    "2018-05-04": DefaultConfigLoader}
 
 def _get_config_loader_for_version(version):
     if version in _CONFIG_VERSIONS_TO_LOADERS:
@@ -16,10 +20,16 @@ def _get_config_loader_for_version(version):
     return loader
 
 def load_organization_from_config(config):
+    '''
+    Generates an Organization model from the provided configuration
+    '''
     config_version = config.get('version', None)
     loader = _get_config_loader_for_version(config_version)
     return loader.load_organization_from_config(config)
 
 def dump_organization_to_config(organization, config_version=None):
+    '''
+    Generates configuration from the provided organization model
+    '''
     loader = _get_config_loader_for_version(config_version)
     return loader.dump_organization_to_config(organization)

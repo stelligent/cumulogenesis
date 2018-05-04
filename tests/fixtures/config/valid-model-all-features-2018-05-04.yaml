@@ -1,14 +1,14 @@
 ---
 root: '123456789' # the account id; used by orgroller to verify the Org root
-featureset: 'ALL' # use this organization for centralized management instead of just centralized billing
-version: '0.1'
+featureset: ALL # use this organization for centralized management instead of just centralized billing
+version: '2018-05-04'
 provisioner:
-  role: org-bootstrapper # the role name generated in new member accounts used for resource provisioning 
+  role: org-bootstrapper # the role name generated in new member accounts used for resource provisioning
   type: cfn-stack-set # if resource stacks are described, use AWS Stack-Sets to provision them
 
 accounts: # list of member accounts to create or invite
   - name: foo-account # the member account's name
-    owner: foo-owner-email@mycompany.com # the email address used to activate the member account 
+    owner: foo-owner-email@mycompany.com # the email address used to activate the member account
     groups:
       - foo-bar-group # arbitrary grouping mechanism for resource provisioning
   - name: bar-account
@@ -22,7 +22,7 @@ accounts: # list of member accounts to create or invite
 policies: # list of service control policies to create
   - name: no-x-policy
     description: allows all services to be utilized except <X>
-    document: 
+    document:
       location: 's3://not-a-real-bucket/or/path'
   - name: scp-federation-only
     description: enables only those services required for IDP federation
@@ -43,20 +43,18 @@ orgunits: # list of top-level Organizational Units; nested structure represents 
     accounts: # list of accounts to place into this OU, cross-referenced by account.name
       - pre-existing-account
   - name: The Foos
-    policies: 
+    policies:
       - no-x-policy
     accounts:
       - foo-account
-    orgunits: 
+    orgunits:
       - name: The Bars
-        policies: []
         accounts:
           - bar-account
-        orgunits: []
 
 stacks: # list of resource stacks to create
   - name: core-vpc
-    orgunits: # list of orgunits whose descendent accounts will receive resource stacks in target regions 
+    orgunits: # list of orgunits whose descendent accounts will receive resource stacks in target regions
       - name: The Foos
         regions:
           - us-east-1
@@ -70,6 +68,6 @@ stacks: # list of resource stacks to create
           - us-east-1
     template:
       content:
-        this: 
+        this:
           - 'is also'
           - 'not a real document'

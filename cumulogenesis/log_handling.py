@@ -1,5 +1,12 @@
+'''
+Logging
+'''
 import logging
 
-LOGGER = logging.getLogger('aws_bootstrap')
+LOGGER = logging.getLogger('cumulogenesis')
 LOGGER.setLevel(logging.DEBUG)
-LOGGER.addHandler(logging.StreamHandler())
+def enable_console_logging():
+    '''
+    Adds a StreamHandler to the logger to log to STDERR when called
+    '''
+    LOGGER.addHandler(logging.StreamHandler())
