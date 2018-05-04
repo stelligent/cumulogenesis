@@ -1,3 +1,5 @@
 notes
 *.pyc
 *.pyo
+*.swp
+*.swo
