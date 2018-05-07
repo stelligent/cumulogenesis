@@ -11,15 +11,24 @@ accounts: # list of member accounts to create or invite
     owner: foo-owner-email@mycompany.com # the email address used to activate the member account
     groups:
       - foo-bar-group # arbitrary grouping mechanism for resource provisioning
+    regions:
+      - us-east-1
+      - eu-west-2
   - name: bar-account
     owner: bar-owner-email@othercompany.com
     groups:
       - foo-bar-group
+    regions:
+      - us-east-1
   - name: pre-existing-account
     owner: pre-existing-account-owner@othercompany.com
     accountid: '987654321'
+    regions:
+      - us-west-2
   - name: orphaned-account
     owner: orphan@somecompany.com
+    regions:
+      - us-east-1
 
 policies: # list of service control policies to create
   - name: no-x-policy
@@ -56,18 +65,13 @@ orgunits: # list of top-level Organizational Units; nested structure represents 
 
 stacks: # list of resource stacks to create
   - name: core-vpc
-    orgunits: # list of orgunits whose descendent accounts will receive resource stacks in target regions
-      - name: The Foos
-        regions:
-          - us-east-1
-          - us-east-2
+    orgunits: # list of orgunits whose descendent accounts will receive resource stacks
+      - The Foos
     template:
       location: 's3://also-not-a-real-bucket/or/path'
   - name: federation-idp
     accounts:
-      - name: pre-existing-account
-        regions:
-          - us-east-1
+      - pre-existing-account
     template:
       content:
         this:

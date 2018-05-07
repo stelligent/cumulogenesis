@@ -131,6 +131,8 @@ class Organization(AwsEntity):
         elif len(account.parent_references) > 1:
             #pylint: disable=line-too-long
             problems.append('referenced as a child of multiple orgunits: %s' % ', '.join(account.parent_references))
+        if not account.regions:
+            problems.append('has no regions')
         return problems
 
     def _validate_accounts(self):
@@ -145,20 +147,15 @@ class Organization(AwsEntity):
         problems = []
         stackset = self.stacks[stackset_name]
         for account in stackset.accounts:
-            if not account['name'] in self.accounts:
-                problems.append('references missing account %s' % account['name'])
-            if not 'regions' in account or not account['regions']:
-                problems.append('has no regions for account %s' % account['name'])
+            if not account in self.accounts:
+                problems.append('references missing account %s' % account)
         for orgunit in stackset.orgunits:
-            if not orgunit['name'] in self.orgunits:
-                problems.append('references missing orgunit %s' % orgunit['name'])
-            if not 'regions' in orgunit or not orgunit['regions']:
-                problems.append('has no regions for orgunit %s' % orgunit['name'])
+            print(orgunit)
+            if not orgunit in self.orgunits:
+                problems.append('references missing orgunit %s' % orgunit)
         for group in stackset.groups:
-            if not group['name'] in self.groups:
-                problems.append('references missing group %s' % group['name'])
-            if not 'regions' in group or not group['regions']:
-                problems.append('has no regions for group %s' % group['name'])
+            if not group in self.groups:
+                problems.append('references missing group %s' % group)
         return problems
 
     def _validate_stacksets(self):

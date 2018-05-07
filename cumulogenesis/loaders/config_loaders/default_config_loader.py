@@ -18,7 +18,8 @@ class DefaultConfigLoader:
     _account_parameters = [{'name': 'name', 'type': str},
                            {'name': 'owner', 'type': str},
                            {'name': 'groups', 'type': list, 'optional': True},
-                           {'name': 'accountid', 'type': str, 'optional': True}]
+                           {'name': 'accountid', 'type': str, 'optional': True},
+                           {'name': 'regions', 'type': list}]
     _policy_parameters = [{'name': 'name', 'type': str},
                           {'name': 'description', 'type': str},
                           {'name': 'document', 'type': dict}]
@@ -241,7 +242,8 @@ class DefaultConfigLoader:
         attribute_map = {"name": "name",
                          "owner": "owner",
                          "groups": "groups",
-                         "account_id": "accountid"}
+                         "account_id": "accountid",
+                         "regions": "regions"}
         for account in accounts.values():
             accounts_list.append(self._render_from_map(source=account, attribute_map=attribute_map))
         return accounts_list

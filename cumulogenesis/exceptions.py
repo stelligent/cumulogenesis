@@ -8,7 +8,7 @@ class MissingRequiredParameterException(Exception):
     Indicates that a required configuration parameter was not provided
     '''
     def __init__(self, parameter, parent):
-        message = "Missing required parameter item %s for %s" % (parameter, parent)
+        message = "Missing required parameter %s for %s" % (parameter, parent)
         Exception.__init__(self, message)
 
 class MultipleParametersSpecifiedException(Exception):

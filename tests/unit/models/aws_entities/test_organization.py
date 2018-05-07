@@ -155,30 +155,18 @@ class TestOrganization(unittest.TestCase):
             "missing_parent": mock.Mock(parent_orgunit="nonexistent", accounts=[], policies=[]),
             "missing_account": mock.Mock(parent_orgunit=None, accounts=["nonexistent"], policies=[]),
             "missing_policy": mock.Mock(parent_orgunit=None, accounts=[], policies=["nonexistent"]),
-            "valid_ou_a": mock.Mock(parent_orgunit=None, accounts=["multiple_references",
-                                                                   "valid_account_a"], policies=[]),
+            "valid_ou_a": mock.Mock(parent_orgunit=None,
+                                    accounts=["multiple_references", "valid_account_a"], policies=[]),
             "valid_ou_b": mock.Mock(parent_orgunit=None, accounts=["multiple_references"], policies=[])}
         accounts_mock = {
-            "orphaned_account": mock.Mock(parent_references=None, groups=[]),
-            "multiple_references": mock.Mock(parent_references=None, groups=[]),
-            "valid_account_a": mock.Mock(parent_references=None, groups=[])}
+            "orphaned_account": mock.Mock(parent_references=None, groups=[], regions=["us-east-1"]),
+            "multiple_references": mock.Mock(parent_references=None, groups=[], regions=["us-east-1"]),
+            "valid_account_a": mock.Mock(parent_references=None, groups=[], regions=["us-east-1"])}
         stacks_mock = {
-            "missing_account": mock.Mock(accounts=[{"name":"nonexistent", "regions": ["us-east-1"]}],
-                                         groups=[], orgunits=[]),
-            "missing_account_region": mock.Mock(accounts=[{"name":"valid_account_a"}],
-                                                groups=[], orgunits=[]),
-            "missing_orgunit": mock.Mock(accounts=[], groups=[],
-                                         orgunits=[{"name":"nonexistent", "regions": ["us-east-1"]}]),
-            "missing_orgunit_region": mock.Mock(accounts=[], groups=[],
-                                                orgunits=[{"name":"valid_ou_a"}]),
-            "valid_stack_a": mock.Mock(accounts=[{"name": "valid_account_a", "regions": ["us-east-1"]}],
-                                       groups=[], orgunits=[]),
-            "missing_group": mock.Mock(accounts=[],
-                                       groups=[{"name": "nonexistent", "regions": ["us-east-1"]}],
-                                       orgunits=[]),
-            "missing_group_region": mock.Mock(accounts=[],
-                                              groups=[{"name": "valid_group", "regions": []}],
-                                              orgunits=[])}
+            "missing_account": mock.Mock(accounts=["nonexistent"], groups=[], orgunits=[]),
+            "missing_orgunit": mock.Mock(accounts=[], groups=[], orgunits=["nonexistent"]),
+            "valid_stack_a": mock.Mock(accounts=["valid_account_a"], groups=[], orgunits=[]),
+            "missing_group": mock.Mock(accounts=[], groups=["nonexistent"], orgunits=[])}
         groups_mock = {"valid_group": {"accounts": ["valid_account_a"], "stacks": ["valid_stack_a"]},
                        "missing_accounts": {"accounts": [], "stacks": ["valid_stack_a"]},
                        "missing_stacks": {"accounts": ["valid_account_a"], "stacks": []}}
@@ -196,11 +184,8 @@ class TestOrganization(unittest.TestCase):
                                               #pylint: disable=line-too-long
                                               'multiple_references': ['referenced as a child of multiple orgunits: valid_ou_a, valid_ou_b']},
                                  'stacks': {'missing_account': ['references missing account nonexistent'],
-                                            'missing_account_region': ['has no regions for account valid_account_a'],
                                             'missing_group': ['references missing group nonexistent'],
-                                            'missing_group_region': ['has no regions for group valid_group'],
-                                            'missing_orgunit': ['references missing orgunit nonexistent'],
-                                            'missing_orgunit_region': ['has no regions for orgunit valid_ou_a']}}
+                                            'missing_orgunit': ['references missing orgunit nonexistent']}}
             problems = org.validate()
             print("Expected:")
             helpers.pretty_print(expected_problems)
