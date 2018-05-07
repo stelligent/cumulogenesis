@@ -186,6 +186,8 @@ class Organization(AwsEntity):
             root['accounts'] = self.orgunits[orgunit_name].accounts
 
     def _generate_orgunit_parent_references(self):
+        for orgunit in self.orgunits.values():
+            orgunit.parent_references = []
         for orgunit in self.orgunits:
             for child in self.orgunits[orgunit].child_orgunits:
                 self.orgunits[child].parent_references.append(orgunit)
