@@ -154,7 +154,9 @@ class TestOrganization(unittest.TestCase):
         orgunits_mock = {
             "missing_account": mock.Mock(accounts=["nonexistent"], policies=[], child_orgunits=[]),
             "missing_policy": mock.Mock(accounts=[], policies=["nonexistent"], child_orgunits=[]),
-            "valid_ou_a": mock.Mock(accounts=["multiple_references", "valid_account_a"], policies=[], child_orgunits=[]),
+            "missing_orgunit": mock.Mock(accounts=[], policies=[], child_orgunits=["nonexistent"]),
+            "valid_ou_a": mock.Mock(accounts=["multiple_references", "valid_account_a"],
+                                    policies=[], child_orgunits=[]),
             "valid_ou_b": mock.Mock(accounts=["multiple_references"], policies=[], child_orgunits=[])}
         accounts_mock = {
             "orphaned_account": mock.Mock(parent_references=None, groups=[], regions=["us-east-1"]),
@@ -176,6 +178,7 @@ class TestOrganization(unittest.TestCase):
             org.stacks = self._add_name_to_entity_mocks(stacks_mock)
             org.groups = groups_mock
             expected_problems = {'orgunits': {'missing_account': ['references missing account nonexistent'],
+                                              'missing_orgunit': ['references missing child orgunit nonexistent'],
                                               'missing_policy': ['references missing policy nonexistent']},
                                  'accounts': {'orphaned_account': ['orphaned'],
                                               #pylint: disable=line-too-long

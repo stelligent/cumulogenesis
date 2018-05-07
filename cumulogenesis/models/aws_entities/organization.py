@@ -83,10 +83,10 @@ class Organization(AwsEntity):
     def _validate_orgunit(self, orgunit_name):
         problems = []
         orgunit = self.orgunits[orgunit_name]
+        for child in orgunit.child_orgunits:
+            if not child in self.orgunits:
+                problems.append('references missing child orgunit %s' % child)
         for account_name in orgunit.accounts:
-            for child in orgunit.child_orgunits:
-                if not child in self.orgunits:
-                    problems.append('references missing child orgunit %s' % child)
             if not account_name in self.accounts:
                 problems.append('references missing account %s' % account_name)
             else:
