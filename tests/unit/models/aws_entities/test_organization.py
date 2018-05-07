@@ -173,10 +173,10 @@ class TestOrganization(unittest.TestCase):
             "valid_stack_a": mock.Mock(accounts=[{"name": "valid_account_a", "regions": ["us-east-1"]}],
                                        groups=[], orgunits=[]),
             "missing_group": mock.Mock(accounts=[],
-                                       groups=[{"name": ["nonexistent"], "regions": ["us-east-1"]}],
+                                       groups=[{"name": "nonexistent", "regions": ["us-east-1"]}],
                                        orgunits=[]),
             "missing_group_region": mock.Mock(accounts=[],
-                                              groups=[{"name": ["valid_account_a"], "regions": ["us-east-1"]}],
+                                              groups=[{"name": "valid_group", "regions": []}],
                                               orgunits=[])}
         groups_mock = {"valid_group": {"accounts": ["valid_account_a"], "stacks": ["valid_stack_a"]},
                        "missing_accounts": {"accounts": [], "stacks": ["valid_stack_a"]},
@@ -196,6 +196,8 @@ class TestOrganization(unittest.TestCase):
                                               'multiple_references': ['referenced as a child of multiple orgunits: valid_ou_a, valid_ou_b']},
                                  'stacks': {'missing_account': ['references missing account nonexistent'],
                                             'missing_account_region': ['has no regions for account valid_account_a'],
+                                            'missing_group': ['references missing group nonexistent'],
+                                            'missing_group_region': ['has no regions for group valid_group'],
                                             'missing_orgunit': ['references missing orgunit nonexistent'],
                                             'missing_orgunit_region': ['has no regions for orgunit valid_ou_a']}}
             problems = org.validate()

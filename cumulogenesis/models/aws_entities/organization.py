@@ -155,8 +155,8 @@ class Organization(AwsEntity):
             if not 'regions' in orgunit or not orgunit['regions']:
                 problems.append('has no regions for orgunit %s' % orgunit['name'])
         for group in stackset.groups:
-            if not group in stackset.groups:
-                problems.append('references missing group %s' % group)
+            if not group['name'] in self.groups:
+                problems.append('references missing group %s' % group['name'])
             if not 'regions' in group or not group['regions']:
                 problems.append('has no regions for group %s' % group['name'])
         return problems
