@@ -148,7 +148,8 @@ class TestOrganization(unittest.TestCase):
         '''
         Test Organization.validate
 
-        This test should include one of each potential problem state.
+        This test should generate a problem for one of each potential
+        invalid Organization state.
         '''
         orgunits_mock = {
             "missing_parent": mock.Mock(parent_orgunit="nonexistent", accounts=[], policies=[]),
