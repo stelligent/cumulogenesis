@@ -1,5 +1,7 @@
 '''
-Integration tests for model loading/validation/dumping to/from config
+Integration tests for model loading/validation/dumping to/from config.
+This serves as the primary test for the config loader system as well, though
+edge cases may deserve their own unit tests as well.
 '''
 import unittest
 import pyaml
