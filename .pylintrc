@@ -1,3 +1,10 @@
 [MESSAGES]
-  disable=too-many-instance-attributes,
-          too-few-public-methods
+disable=too-many-instance-attributes,
+        too-few-public-methods,
+        protected-access
+
+[FORMAT]
+max-line-length=120
+
+[BASIC]
+method-rgx=[a-z_][a-z0-9_]{2,50}$

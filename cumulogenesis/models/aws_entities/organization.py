@@ -37,6 +37,7 @@ class Organization(AwsEntity):
             else:
                 orgunit_paths.append(path[::-1])
         orgunit_hierarchy = {}
+        print(orgunit_paths)
         # Turn paths into a nested dict hierarchy
         for path in orgunit_paths:
             self._append_path(orgunit_hierarchy, path)
@@ -92,13 +93,6 @@ class Organization(AwsEntity):
         if group_problems:
             problems['groups'] = group_problems
         return problems
-
-    def get_orgunit(self, orgunit_name):
-        '''
-        Looks up a single orgunit by name and returns the OrganizationalUnit object.
-        Returns None if the orgunit is not found.
-        '''
-        return self.orgunits.get(orgunit_name, None)
 
     def _initialize_account_parent_references(self):
         for account_name in self.accounts:
@@ -161,6 +155,8 @@ class Organization(AwsEntity):
             if not 'regions' in orgunit or not orgunit['regions']:
                 problems.append('has no regions for orgunit %s' % orgunit['name'])
         for group in stackset.groups:
+            if not group in stackset.groups:
+                problems.append('references missing group %s' % group)
             if not 'regions' in group or not group['regions']:
                 problems.append('has no regions for group %s' % group['name'])
         return problems
@@ -231,10 +227,16 @@ class Organization(AwsEntity):
         return graph
 
     def _append_path(self, root, paths):
+        '''
+        Recursive function that decends through an OU path building out the
+        OU hierarchy.
+        '''
         if paths:
-            child = root.setdefault(paths[0], {'orgunits': {}})
+            child = root.setdefault(paths[0], {})
+            if not 'orgunits' in child:
+                child['orgunits'] = {}
             if paths[0] in self.orgunits and self.orgunits[paths[0]].accounts:
-                root[paths[0]]['accounts'] = self.orgunits[paths[0]].accounts
+                child['accounts'] = self.orgunits[paths[0]].accounts
             self._append_path(child['orgunits'], paths[1:])
             if not child['orgunits']:
                 child.pop('orgunits')
@@ -242,7 +244,7 @@ class Organization(AwsEntity):
     def _find_orphaned_accounts(self):
         orphaned_accounts = []
         for account in self.accounts.values():
-            # We specifically want to ensure that parent_references is 0 and not None
+            # We specifically want to check that parent_references is 0 and not None
             #pylint: disable=len-as-condition
             if len(account.parent_references) == 0:
                 orphaned_accounts.append(account.name)
