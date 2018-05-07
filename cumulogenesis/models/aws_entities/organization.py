@@ -26,29 +26,11 @@ class Organization(AwsEntity):
         '''
         Returns a dict representing the hierarchy of accounts and orgunits in the Organization model
         '''
-        orgunit_graph = self._get_orgunit_graph()
-        orgunit_paths = []
-        orphaned_orgunits = []
-        # Map paths for each org unit through its parents to the root account
-        for orgunit in self.orgunits:
-            path = self._find_path(graph=orgunit_graph, start=orgunit, end='ROOT_ACCOUNT')
-            if not path:
-                orphaned_orgunits.append(orgunit)
-            else:
-                orgunit_paths.append(path[::-1])
-        orgunit_hierarchy = {}
-        print(orgunit_paths)
-        # Turn paths into a nested dict hierarchy
-        for path in orgunit_paths:
-            self._append_path(orgunit_hierarchy, path)
+        orgunit_hierarchy = self._orgunits_to_hierarchy()
         # Add orphaned orgunits and accounts to the hierarchy as a separate root key
         orphaned_accounts = self._find_orphaned_accounts()
-        if orphaned_accounts or orphaned_orgunits:
-            orgunit_hierarchy['ORPHANED'] = {}
         if orphaned_accounts:
-            orgunit_hierarchy['ORPHANED']['accounts'] = orphaned_accounts
-        if orphaned_orgunits:
-            orgunit_hierarchy['ORPHANED']['orgunits'] = orphaned_orgunits
+            orgunit_hierarchy['ORPHANED_ACCOUNTS'] = orphaned_accounts
         return orgunit_hierarchy
 
     def raise_if_invalid(self):
@@ -101,10 +83,10 @@ class Organization(AwsEntity):
     def _validate_orgunit(self, orgunit_name):
         problems = []
         orgunit = self.orgunits[orgunit_name]
-        if orgunit.parent_orgunit:
-            if not orgunit.parent_orgunit in self.orgunits:
-                problems.append('orphaned from parent %s' % orgunit.parent_orgunit)
         for account_name in orgunit.accounts:
+            for child in orgunit.child_orgunits:
+                if not child in self.orgunits:
+                    problems.append('references missing child orgunit %s' % child)
             if not account_name in self.accounts:
                 problems.append('references missing account %s' % account_name)
             else:
@@ -150,7 +132,6 @@ class Organization(AwsEntity):
             if not account in self.accounts:
                 problems.append('references missing account %s' % account)
         for orgunit in stackset.orgunits:
-            print(orgunit)
             if not orgunit in self.orgunits:
                 problems.append('references missing orgunit %s' % orgunit)
         for group in stackset.groups:
@@ -191,52 +172,32 @@ class Organization(AwsEntity):
             self.groups[group_name][entity_type] = []
         self.groups[group_name][entity_type].append(entity_name)
 
-    def _orgunits_to_graph(self):
-        graph = {}
-        for orgunit in self.orgunits:
-            if orgunit.parent_orgunit:
-                graph[orgunit.name] = orgunit.parent_orgunit
-            else:
-                graph[orgunit.name] = 'ROOT_ACCOUNT'
-        return graph
-
-    def _find_path(self, graph, start, end, path=None):
-        path = path or []
-        path += [start]
-        if start == end:
-            return path
-        if not start in path:
-            return None
-        newstart = graph[start]
-        if newstart in path:
-            path += [newstart]
-            raise exceptions.OrgunitHierarchyCycleException(path)
-        else:
-            return self._find_path(graph, newstart, end, path)
-
-    def _get_orgunit_graph(self):
-        graph = {}
-        for orgunit in self.orgunits.values():
-            if orgunit.parent_orgunit:
-                graph[orgunit.name] = orgunit.parent_orgunit
-            else:
-                graph[orgunit.name] = 'ROOT_ACCOUNT'
-        return graph
-
-    def _append_path(self, root, paths):
+    def _append_path(self, root, orgunit_name):
         '''
         Recursive function that decends through an OU path building out the
         OU hierarchy.
         '''
-        if paths:
-            child = root.setdefault(paths[0], {})
-            if not 'orgunits' in child:
-                child['orgunits'] = {}
-            if paths[0] in self.orgunits and self.orgunits[paths[0]].accounts:
-                child['accounts'] = self.orgunits[paths[0]].accounts
-            self._append_path(child['orgunits'], paths[1:])
-            if not child['orgunits']:
-                child.pop('orgunits')
+        if self.orgunits[orgunit_name].child_orgunits:
+            root['orgunits'] = {}
+            for child in self.orgunits[orgunit_name].child_orgunits:
+                root['orgunits'][child] = {}
+                self._append_path(root['orgunits'][child], child)
+        if self.orgunits[orgunit_name].accounts:
+            root['accounts'] = self.orgunits[orgunit_name].accounts
+
+    def _generate_orgunit_parent_references(self):
+        for orgunit in self.orgunits:
+            for child in self.orgunits[orgunit].child_orgunits:
+                self.orgunits[child].parent_references.append(orgunit)
+
+    def _orgunits_to_hierarchy(self):
+        self._generate_orgunit_parent_references()
+        hierarchy = {"ROOT_ACCOUNT": {'orgunits': {}}}
+        top_level_orgunits = [orgunit.name for orgunit in self.orgunits.values() if not orgunit.parent_references]
+        for orgunit in top_level_orgunits:
+            hierarchy['ROOT_ACCOUNT']['orgunits'][orgunit] = {}
+            self._append_path(hierarchy['ROOT_ACCOUNT']['orgunits'][orgunit], orgunit)
+        return hierarchy
 
     def _find_orphaned_accounts(self):
         orphaned_accounts = []

@@ -70,9 +70,9 @@ class TestOrganization(unittest.TestCase):
         accounts_mock = {"account_a": mock.Mock(parent_references=['ou_a']),
                          "account_b": mock.Mock(parent_references=['ou_b']),
                          "account_c": mock.Mock(parent_references=['ou_c'])}
-        orgunits_mock = {"ou_a": mock.Mock(parent_orgunit=None, accounts=["account_a"]),
-                         "ou_b": mock.Mock(parent_orgunit="ou_a", accounts=["account_b"]),
-                         "ou_c": mock.Mock(parent_orgunit=None, accounts=["account_c"])}
+        orgunits_mock = {"ou_a": mock.Mock(child_orgunits=['ou_b'], accounts=["account_a"], parent_references=[]),
+                         "ou_b": mock.Mock(child_orgunits=[], accounts=["account_b"], parent_references=[]),
+                         "ou_c": mock.Mock(child_orgunits=[], accounts=["account_c"], parent_references=[])}
         org = self._get_base_organization()
         org.orgunits = self._add_name_to_entity_mocks(orgunits_mock)
         org.accounts = self._add_name_to_entity_mocks(accounts_mock)
@@ -101,14 +101,14 @@ class TestOrganization(unittest.TestCase):
         accounts_mock = {"account_a": mock.Mock(parent_references=['ou_a']),
                          "account_b": mock.Mock(parent_references=['ou_b']),
                          "account_c": mock.Mock(parent_references=[])}
-        orgunits_mock = {"ou_a": mock.Mock(parent_orgunit=None, accounts=["account_a"]),
-                         "ou_b": mock.Mock(parent_orgunit="ou_a", accounts=["account_b"]),
-                         "ou_c": mock.Mock(parent_orgunit=None, accounts=[])}
+        orgunits_mock = {"ou_a": mock.Mock(child_orgunits=['ou_b'], accounts=["account_a"], parent_references=[]),
+                         "ou_b": mock.Mock(child_orgunits=[], accounts=["account_b"], parent_references=[]),
+                         "ou_c": mock.Mock(child_orgunits=[], accounts=[], parent_references=[])}
         org = self._get_base_organization()
         org.orgunits = self._add_name_to_entity_mocks(orgunits_mock)
         org.accounts = self._add_name_to_entity_mocks(accounts_mock)
         expected_hierarchy = {
-            "ORPHANED": {"accounts": ["account_c"]},
+            "ORPHANED_ACCOUNTS": ["account_c"],
             "ROOT_ACCOUNT": {
                 "orgunits": {
                     "ou_a": {
@@ -152,12 +152,10 @@ class TestOrganization(unittest.TestCase):
         invalid Organization state.
         '''
         orgunits_mock = {
-            "missing_parent": mock.Mock(parent_orgunit="nonexistent", accounts=[], policies=[]),
-            "missing_account": mock.Mock(parent_orgunit=None, accounts=["nonexistent"], policies=[]),
-            "missing_policy": mock.Mock(parent_orgunit=None, accounts=[], policies=["nonexistent"]),
-            "valid_ou_a": mock.Mock(parent_orgunit=None,
-                                    accounts=["multiple_references", "valid_account_a"], policies=[]),
-            "valid_ou_b": mock.Mock(parent_orgunit=None, accounts=["multiple_references"], policies=[])}
+            "missing_account": mock.Mock(accounts=["nonexistent"], policies=[], child_orgunits=[]),
+            "missing_policy": mock.Mock(accounts=[], policies=["nonexistent"], child_orgunits=[]),
+            "valid_ou_a": mock.Mock(accounts=["multiple_references", "valid_account_a"], policies=[], child_orgunits=[]),
+            "valid_ou_b": mock.Mock(accounts=["multiple_references"], policies=[], child_orgunits=[])}
         accounts_mock = {
             "orphaned_account": mock.Mock(parent_references=None, groups=[], regions=["us-east-1"]),
             "multiple_references": mock.Mock(parent_references=None, groups=[], regions=["us-east-1"]),
@@ -177,8 +175,7 @@ class TestOrganization(unittest.TestCase):
             org.accounts = self._add_name_to_entity_mocks(accounts_mock)
             org.stacks = self._add_name_to_entity_mocks(stacks_mock)
             org.groups = groups_mock
-            expected_problems = {'orgunits': {'missing_parent': ['orphaned from parent nonexistent'],
-                                              'missing_account': ['references missing account nonexistent'],
+            expected_problems = {'orgunits': {'missing_account': ['references missing account nonexistent'],
                                               'missing_policy': ['references missing policy nonexistent']},
                                  'accounts': {'orphaned_account': ['orphaned'],
                                               #pylint: disable=line-too-long

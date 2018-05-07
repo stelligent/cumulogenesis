@@ -180,17 +180,19 @@ class DefaultConfigLoader:
         policies_by_name = self._list_to_dict_by_names(policies, 'policy')
         return policies_by_name
 
-    def _load_orgunits_from_orgunit(self, config, parent_orgunit=None):
+    def _load_orgunits_from_orgunit(self, config):
         orgunits = []
         for orgunit in config:
             self._validate_each_parameter(config=orgunit, parent='orgunit',
                                           parameters=self._orgunit_parameters)
             orgunit_parameters = copy.deepcopy(orgunit)
-            orgunit_parameters['parent_orgunit'] = parent_orgunit
+            orgunit_parameters['child_orgunits'] = []
             if 'orgunits' in orgunit_parameters:
-                child_config = orgunit_parameters.pop('orgunits')
+                children = orgunit_parameters.pop('orgunits')
+                for child in children:
+                    orgunit_parameters['child_orgunits'].append(child['name'])
                 #pylint: disable=line-too-long
-                child_orgunits = self._load_orgunits_from_orgunit(config=child_config, parent_orgunit=orgunit['name'])
+                child_orgunits = self._load_orgunits_from_orgunit(config=children)
                 orgunits += child_orgunits
             orgunit_instance = OrganizationalUnit(**orgunit_parameters)
             orgunit_instance.raw_config = orgunit

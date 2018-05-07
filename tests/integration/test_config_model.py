@@ -72,6 +72,10 @@ class TestConfigModel(unittest.TestCase):
         expected_problems = {"accounts": {"orphaned-account": ["orphaned"]}}
         assert expected_problems == problems
         hierarchy = org_model.get_orgunit_hierarchy()
+        print("Expected hierarchy:")
+        helpers.pretty_print(expected_hierarchy)
+        print("Actual hierarchy:")
+        helpers.pretty_print(hierarchy)
         assert hierarchy == expected_hierarchy
         with self.assertRaises(exceptions.InvalidOrganizationException):
             config_loader.dump_organization_to_config(org_model, loader_version)

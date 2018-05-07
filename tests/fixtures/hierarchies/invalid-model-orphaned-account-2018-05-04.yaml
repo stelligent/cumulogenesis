@@ -1,6 +1,5 @@
-ORPHANED:
-  accounts:
-    - orphaned-account
+ORPHANED_ACCOUNTS:
+  - orphaned-account
 ROOT_ACCOUNT:
   orgunits:
     'IAM Federation':
