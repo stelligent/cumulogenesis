@@ -1,5 +1,8 @@
+# TODO: adopt GitHub recommended .gitignore
+
 notes
 *.pyc
 *.pyo
 *.swp
 *.swo
+.vscode
