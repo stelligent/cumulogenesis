@@ -22,7 +22,7 @@ accounts: # list of member accounts to create or invite
       - us-east-1
   - name: pre-existing-account
     owner: pre-existing-account-owner@othercompany.com
-    accountid: '987654321'
+    account_id: '987654321'
     regions:
       - us-west-2
   - name: orphaned-account

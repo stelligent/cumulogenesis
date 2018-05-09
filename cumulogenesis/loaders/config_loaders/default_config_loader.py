@@ -4,8 +4,7 @@ Provides the DefaultConfigLoader loader class
 import copy
 from collections import OrderedDict
 #pylint: disable=line-too-long
-from cumulogenesis.models.aws_entities import Organization, Account, OrganizationalUnit, Policy, StackSet
-from cumulogenesis.models.provisioner import Provisioner
+from cumulogenesis.models.aws_entities import Organization
 from cumulogenesis.log_handling import LOGGER as logger
 from cumulogenesis import exceptions
 
@@ -39,6 +38,8 @@ class DefaultConfigLoader:
                                 {'name': 'regions', 'type': list}]
     _stack_template_parameters = [{'name': 'location', 'type': str},
                                   {'name': 'content', 'type': dict}]
+    _default_provisioner_template = {"role": "org-bootstrapper",
+                                     "type": "cfn-stack-set"}
 
     def __init__(self):
         self.config_version = '2018-05-04'
@@ -130,39 +131,33 @@ class DefaultConfigLoader:
     def _list_to_dict_by_names(entity_list, entity_type):
         dict_by_names = {}
         for item in entity_list:
-            if item.name in dict_by_names:
-                raise exceptions.DuplicateNamesException(name=item.name, entity_type=entity_type)
+            if item['name'] in dict_by_names:
+                raise exceptions.DuplicateNamesException(name=item['name'], entity_type=entity_type)
             else:
-                dict_by_names[item.name] = item
+                dict_by_names[item['name']] = item
         return dict_by_names
 
     def _load_provisioner(self, config):
         if not config:
             logger.info('No provisioner configuration provided, initializing with defaults.')
-            return Provisioner()
+            return copy.deepcopy(self._default_provisioner_template)
         else:
-            provisioner_params = {}
             if 'role' in config:
                 self._validate_is_type(config=config, parameter='role', parent='provisioner',
                                        expected_type=str)
-                provisioner_params['role'] = config['role']
             if 'type' in config:
                 self._validate_is_type(config=config, parameter='type', parent='provisioner',
                                        expected_type=str)
-                provisioner_params['provisioner_type'] = config['type']
-            provisioner_instance = Provisioner(**provisioner_params)
-            provisioner_instance.raw_config = config
-            return provisioner_instance
+            return config
 
     def _load_accounts(self, config):
         accounts = []
         for account in config:
             self._validate_each_parameter(config=account, parent='account',
                                           parameters=self._account_parameters)
-            account_instance = Account(**account)
-            account_instance.raw_config = account
-            account_instance.source = 'config'
-            accounts.append(account_instance)
+            account_parameters = copy.deepcopy(account)
+            account_parameters['source'] = 'config'
+            accounts.append(account_parameters)
         accounts_by_name = self._list_to_dict_by_names(accounts, 'account')
         return accounts_by_name
 
@@ -173,10 +168,9 @@ class DefaultConfigLoader:
                                           parameters=self._policy_parameters)
             self._validate_one_of_parameters(config=policy['document'], parent='policy.document',
                                              parameters=self._policy_document_parameters)
-            policy_instance = Policy(**policy)
-            policy_instance.raw_config = policy
-            policy_instance.source = 'config'
-            policies.append(policy_instance)
+            policy_parameters = copy.deepcopy(policy)
+            policy_parameters['source'] = 'config'
+            policies.append(policy_parameters)
         policies_by_name = self._list_to_dict_by_names(policies, 'policy')
         return policies_by_name
 
@@ -194,10 +188,8 @@ class DefaultConfigLoader:
                 #pylint: disable=line-too-long
                 child_orgunits = self._load_orgunits_from_orgunit(config=children)
                 orgunits += child_orgunits
-            orgunit_instance = OrganizationalUnit(**orgunit_parameters)
-            orgunit_instance.raw_config = orgunit
-            orgunit_instance.source = 'config'
-            orgunits.append(orgunit_instance)
+            orgunit_parameters['source'] = 'config'
+            orgunits.append(orgunit_parameters)
         return orgunits
 
     def _load_orgunits(self, config):
@@ -217,10 +209,9 @@ class DefaultConfigLoader:
                     target_name = 'stack.%s' % key
                     self._validate_each_parameter(config=stack, parent=target_name,
                                                   parameters=self._stack_target_parameters)
-            stack_instance = StackSet(**stack)
-            stack_instance.raw_config = stack
-            stack_instance.source = 'config'
-            stacks.append(stack_instance)
+            stack_parameters = copy.deepcopy(stack)
+            stack_parameters['source'] = 'config'
+            stacks.append(stack)
         stacks_by_name = self._list_to_dict_by_names(stacks, 'stack')
         return stacks_by_name
 
@@ -228,7 +219,7 @@ class DefaultConfigLoader:
     def _render_from_map(source, attribute_map):
         mapped_output = OrderedDict()
         for attribute_name, config_name in attribute_map.items():
-            mapped_attribute = getattr(source, attribute_name)
+            mapped_attribute = source.get(attribute_name, None)
             if mapped_attribute:
                 mapped_output[config_name] = mapped_attribute
         return mapped_output
@@ -244,7 +235,7 @@ class DefaultConfigLoader:
         attribute_map = {"name": "name",
                          "owner": "owner",
                          "groups": "groups",
-                         "account_id": "accountid",
+                         "account_id": "account_id",
                          "regions": "regions"}
         for account in accounts.values():
             accounts_list.append(self._render_from_map(source=account, attribute_map=attribute_map))

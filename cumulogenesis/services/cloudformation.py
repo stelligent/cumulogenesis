@@ -1,9 +1,10 @@
+'''
+Provides CloudformationService
+'''
 import boto3
 from botocore.client import ClientError
 
 from cumulogenesis.log_handling import LOGGER as logger
-from cumulogenesis.models.aws_entities import Account, StackSet
-
 # raise NotImplementedError()
 
 

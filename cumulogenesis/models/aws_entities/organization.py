@@ -1,11 +1,10 @@
 '''
 Provides the Organization AwsEntity model class
 '''
-from cumulogenesis.models.aws_entity import AwsEntity
 from cumulogenesis import exceptions
 
 # pylint: disable=too-many-instance-attributes
-class Organization(AwsEntity):
+class Organization:
     '''
     Models an AWS Organization entitiy
     '''
@@ -48,12 +47,12 @@ class Organization(AwsEntity):
         '''
         self.groups = {}
         for account in self.accounts.values():
-            for group in account.groups:
-                self._add_entity_to_group(group_name=group, entity_name=account.name,
+            for group in account.get('groups', []):
+                self._add_entity_to_group(group_name=group, entity_name=account['name'],
                                           entity_type='accounts')
         for stack in self.stacks.values():
-            for group in stack.groups:
-                self._add_entity_to_group(group_name=group, entity_name=stack.name,
+            for group in stack.get('groups', []):
+                self._add_entity_to_group(group_name=group, entity_name=stack['name'],
                                           entity_type='stacks')
 
     def validate(self):
@@ -78,20 +77,20 @@ class Organization(AwsEntity):
 
     def _initialize_account_parent_references(self):
         for account_name in self.accounts:
-            self.accounts[account_name].parent_references = []
+            self.accounts[account_name]['parent_references'] = []
 
     def _validate_orgunit(self, orgunit_name):
         problems = []
         orgunit = self.orgunits[orgunit_name]
-        for child in orgunit.child_orgunits:
+        for child in orgunit.get('child_orgunits', []):
             if not child in self.orgunits:
                 problems.append('references missing child orgunit %s' % child)
-        for account_name in orgunit.accounts:
+        for account_name in orgunit.get('accounts', []):
             if not account_name in self.accounts:
                 problems.append('references missing account %s' % account_name)
             else:
-                self.accounts[account_name].parent_references.append(orgunit.name)
-        for policy_name in orgunit.policies:
+                self.accounts[account_name]['parent_references'].append(orgunit['name'])
+        for policy_name in orgunit.get('policies', []):
             if not policy_name in self.policies:
                 problems.append('references missing policy %s' % policy_name)
         return problems
@@ -108,12 +107,12 @@ class Organization(AwsEntity):
     def _validate_account(self, account_name):
         problems = []
         account = self.accounts[account_name]
-        if not account.parent_references:
+        if not account['parent_references']:
             problems.append('orphaned')
-        elif len(account.parent_references) > 1:
+        elif len(account['parent_references']) > 1:
             #pylint: disable=line-too-long
-            problems.append('referenced as a child of multiple orgunits: %s' % ', '.join(account.parent_references))
-        if not account.regions:
+            problems.append('referenced as a child of multiple orgunits: %s' % ', '.join(account['parent_references']))
+        if not account['regions']:
             problems.append('has no regions')
         return problems
 
@@ -128,13 +127,13 @@ class Organization(AwsEntity):
     def _validate_stackset(self, stackset_name):
         problems = []
         stackset = self.stacks[stackset_name]
-        for account in stackset.accounts:
+        for account in stackset.get('accounts', []):
             if not account in self.accounts:
                 problems.append('references missing account %s' % account)
-        for orgunit in stackset.orgunits:
+        for orgunit in stackset.get('orgunits', []):
             if not orgunit in self.orgunits:
                 problems.append('references missing orgunit %s' % orgunit)
-        for group in stackset.groups:
+        for group in stackset.get('groups', []):
             if not group in self.groups:
                 problems.append('references missing group %s' % group)
         return problems
@@ -164,7 +163,6 @@ class Organization(AwsEntity):
                 problems[group_name] = group_problems
         return problems
 
-
     def _add_entity_to_group(self, group_name, entity_name, entity_type):
         if not group_name in self.groups:
             self.groups[group_name] = {"name": group_name}
@@ -177,25 +175,25 @@ class Organization(AwsEntity):
         Recursive function that decends through an OU path building out the
         OU hierarchy.
         '''
-        if self.orgunits[orgunit_name].child_orgunits:
+        if self.orgunits[orgunit_name].get('child_orgunits', []):
             root['orgunits'] = {}
-            for child in self.orgunits[orgunit_name].child_orgunits:
+            for child in self.orgunits[orgunit_name]['child_orgunits']:
                 root['orgunits'][child] = {}
                 self._append_path(root['orgunits'][child], child)
-        if self.orgunits[orgunit_name].accounts:
-            root['accounts'] = self.orgunits[orgunit_name].accounts
+        if self.orgunits[orgunit_name]['accounts']:
+            root['accounts'] = self.orgunits[orgunit_name]['accounts']
 
     def _generate_orgunit_parent_references(self):
         for orgunit in self.orgunits.values():
-            orgunit.parent_references = []
+            orgunit['parent_references'] = []
         for orgunit in self.orgunits:
-            for child in self.orgunits[orgunit].child_orgunits:
-                self.orgunits[child].parent_references.append(orgunit)
+            for child in self.orgunits[orgunit]['child_orgunits']:
+                self.orgunits[child]['parent_references'].append(orgunit)
 
     def _orgunits_to_hierarchy(self):
         self._generate_orgunit_parent_references()
         hierarchy = {"ROOT_ACCOUNT": {'orgunits': {}}}
-        top_level_orgunits = [orgunit.name for orgunit in self.orgunits.values() if not orgunit.parent_references]
+        top_level_orgunits = [orgunit['name'] for orgunit in self.orgunits.values() if not orgunit['parent_references']]
         for orgunit in top_level_orgunits:
             hierarchy['ROOT_ACCOUNT']['orgunits'][orgunit] = {}
             self._append_path(hierarchy['ROOT_ACCOUNT']['orgunits'][orgunit], orgunit)
@@ -206,6 +204,6 @@ class Organization(AwsEntity):
         for account in self.accounts.values():
             # We specifically want to check that parent_references is 0 and not None
             #pylint: disable=len-as-condition
-            if len(account.parent_references) == 0:
-                orphaned_accounts.append(account.name)
+            if len(account['parent_references']) == 0:
+                orphaned_accounts.append(account['name'])
         return orphaned_accounts
