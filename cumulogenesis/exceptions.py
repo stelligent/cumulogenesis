@@ -23,7 +23,7 @@ class MultipleParametersSpecifiedException(Exception):
 
 class ParameterTypeMismatchException(Exception):
     '''
-    Indicates ethat the provided configuration parameter was not of
+    Indicates that the provided configuration parameter was not of
     the expected type
     '''
     def __init__(self, parameter, expected_type, parent):
@@ -56,4 +56,28 @@ class OrgunitHierarchyCycleException(Exception):
     '''
     def __init__(self, cycle_path):
         message = 'Detected cycle in the orgunit hierarchy:\n   %s' % '\n=> '.join(cycle_path)
+        Exception.__init__(self, message)
+
+class AccessKeysInvalidException(Exception):
+    '''
+    Indicates that there was a problem with the provided access keys when building
+    a boto3 session.
+    '''
+    pass
+
+class RoleNameNotSpecifiedException(Exception):
+    '''
+    Indicates that a role name wasn't provided and the session builder wasn't given
+    a default role name to use otherwise.
+    '''
+    pass
+
+class OrganizationMemberAccountException(Exception):
+    '''
+    Indicates that the account is already a member account of an organization and so
+    cannot become an organization root account.
+    '''
+    def __init__(self, account_id, master_account_id):
+        #pylint: disable=line-too-long
+        message = 'The desired root account %s is already a member of an organization with master account %s' % (account_id, master_account_id)
         Exception.__init__(self, message)

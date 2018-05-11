@@ -73,6 +73,7 @@ class DefaultConfigLoader:
         Returns the created organization.
         '''
         organization = Organization(root_account_id=config['root'])
+        organization.source = "config"
         organization.raw_config = config
         if 'featureset' in config:
             organization.featureset = config['featureset']

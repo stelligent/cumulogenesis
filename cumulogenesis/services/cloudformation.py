@@ -10,12 +10,31 @@ from cumulogenesis.log_handling import LOGGER as logger
 
 class CloudformationService:
     ''' Instance constructor - requires a pre-configured boto3 Session object '''
-    def __init__(self, session):
-        self.session = session
-        self.client = boto3.client('cloudformation', session)
+    def __init__(self, session_builder):
+        self.session_builder = session_builder
+        # To do: When working with for stack(set)s in a given account/region,
+        # use something along the lines of:
+        #   session = self.session_builder.get_account_role_session(accountid, region)
+        #   session.client('cloudformation')
+        #
+        # It's anticipated that instances of this service may need to  work with
+        # multiple account/region pairs, so don't do that in __init__
+        #
+        # Remove the below once implemented.
+        #
+        #self.session = session
+        #self.client = boto3.client('cloudformation', session)
 
-    def upsert_stackset(self, stackset):
-        ''' Create or update a stack-set '''
+    def upsert_stackset(self, organization, stackset_name):
+        '''
+        Create or update a stack-set from the stackset model dict in the
+        organization model.
+
+        The caller is responsible for ensuring that the organization
+        is in a suitable state for the stackset to be updated, (e.g.,
+        all required parameter stacks have been upserted, necessary account,
+        orgunit resources are in place).
+        '''
         aws_stackset = self._retrieve_stackset(stackset_name=stackset.name)
         if aws_stackset:
             logger.debug(aws_stackset)
@@ -23,6 +42,14 @@ class CloudformationService:
             return self._update_stackset(stackset=stackset)
 
         return self._create_stackset(stackset=stackset)
+
+    def load_stacksets(self, organization):
+        '''
+        Not implemented
+
+        This should update organization.stacksets with existing stacksets.
+        '''
+        pass
 
     def _retrieve_stackset(self, stackset_name):
         '''

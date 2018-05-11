@@ -2,23 +2,33 @@
 Provides the Organization AwsEntity model class
 '''
 from cumulogenesis import exceptions
+from cumulogenesis.services.session import SessionService
+from cumulogenesis.services.organization import OrganizationService
+from cumulogenesis.services.cloudformation import CloudformationService
 
 # pylint: disable=too-many-instance-attributes
 class Organization:
     '''
     Models an AWS Organization entitiy
     '''
-    def __init__(self, root_account_id, aws_connector=None):
+    def __init__(self, root_account_id, source=None):
         self.root_account_id = root_account_id
-        self.aws_connector = aws_connector
         self.featureset = None
         self.accounts = {}
+        self.account_ids_to_parents = {}
         self.policies = {}
         self.orgunits = {}
+        self.ids_to_children = {}
         self.stacks = {}
         self.groups = None
         self.provisioner = None
         self.raw_config = None
+        self.session_builder = None
+        self.source = source
+        self.aws_model = None
+        self.exists = True
+        self.root_parent_id = None
+        self.org_id = None
         super(Organization).__init__()
 
     def get_orgunit_hierarchy(self):
@@ -74,6 +84,54 @@ class Organization:
         if group_problems:
             problems['groups'] = group_problems
         return problems
+
+    def initialize_aws_model(self):
+        '''
+        Initializes a new model of the organization loaded from AWS as the
+        Organization's aws_model attribute.
+        '''
+        self.aws_model = Organization(root_account_id=self.root_account_id)
+        self.aws_model.source = "aws"
+        self.aws_model.provisioner = self.provisioner
+        self.aws_model.load()
+
+    def load(self):
+        '''
+        Builds out the Organization model from what exists in AWS
+        '''
+        self._load_organization()
+        self._load_stacksets()
+
+    def _initialize_session_builder(self):
+        session_builder_params = {}
+        if 'access_key' in self.provisioner:
+            session_builder_params["access_key"] = self.provisioner.get('access_key', None)
+            session_builder_params["secret_key"] = self.provisioner.get('secret_key', None)
+        elif 'profile' in self.provisioner:
+            session_builder_params['profile_name'] = self.provisioner['profile']
+        if 'default_region' in self.provisioner:
+            session_builder_params['default_region'] = self.provisioner['default_region']
+        if 'role' in self.provisioner:
+            session_builder_params['default_role_name'] = self.provisioner['role']
+        self.session_builder = SessionService(**session_builder_params)
+
+    def _get_session_builder(self):
+        if not self.session_builder:
+            self._initialize_session_builder()
+        return self.session_builder
+
+    def _load_organization(self):
+        session_builder = self._get_session_builder()
+        organization_service = OrganizationService(session_builder=session_builder)
+        organization_service.load_organization(organization=self)
+        organization_service.load_policies(organization=self)
+        organization_service.load_orgunits(organization=self)
+        organization_service.load_accounts(organization=self)
+
+    def _load_stacksets(self):
+        session_builder = self._get_session_builder()
+        cloudformation_service = CloudformationService(session_builder=session_builder)
+        cloudformation_service.load_stacksets(organization=self)
 
     def _initialize_account_parent_references(self):
         for account_name in self.accounts:
