@@ -51,21 +51,21 @@ class CloudformationService:
 
         Given that the organization has accounts in its accounts dict,
         for each account:
-        Given that the account's regions key is a list of regions:
-        For each region element, when the element is a dict and contains the
-        parameters key, the parameters dict should be a key=>value mapping
-        of Parameter Store parameters that should be set for the account in the region.
+        Given that the account's regions key is a dict of regions:
+        For each region dict, if it has a parameters key, the parameters dict
+        should be a key=>value mapping of Parameter Store parameters that should
+        be set for the account in the region.
 
         e.g.,
         organization.accounts = {
             "account_a": {
                 "account_id": "123456789",
                 "name": "account_a",
-                "regions": [
-                    "us-east-1",
+                "regions": {
+                    "us-east-1": {},
                     "us-east-2": {
                         "parameters": {
-                            "cloudtrail-bucket": "some_cloudtrail_bucket"}}]}}
+                            "cloudtrail-bucket": "some_cloudtrail_bucket"}}}}}
 
         This method should dynamically generate a CloudFormation template for
         each of these account/region mappings if any parameters are set and upsert
