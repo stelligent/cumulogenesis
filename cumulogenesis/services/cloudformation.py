@@ -69,7 +69,9 @@ class CloudformationService:
 
         This method should dynamically generate a CloudFormation template for
         each of these account/region mappings if any parameters are set and upsert
-        a CloudFormation stack from it.
+        a CloudFormation stack from it. The parameter paths should have the prefix
+        /cumulogenesis/ to keep them distinct from other Parameter Store parameters
+        created by the user.
 
         The caller is responsible for ensuring that the account exists
         before calling this method.
