@@ -2,18 +2,18 @@
 Provides SessionService
 '''
 
-import boto3
 import time
+import boto3
 
-from cumulogenesis.log_handling import LOGGER as logger
 from cumulogenesis import exceptions
 
-class SessionService:
+class SessionService(object):
     '''
     Provides methods for building Boto3 sessions from the provided account,
     profile, and role information
     '''
 
+    #pylint: disable=line-too-long,too-many-arguments
     def __init__(self, profile_name=None, default_role_name=None, access_key=None, secret_key=None, default_region=None):
         self.profile_name = profile_name
         self.default_role_name = default_role_name
@@ -50,7 +50,7 @@ class SessionService:
         base_session = self.get_base_session(region=region)
         sts = base_session.client('sts')
         if not role_name and not self.default_role_name:
-            raise exceptions.RoleNameNotSpecified('Neither a role name nor default role name were specified.')
+            raise exceptions.RoleNameNotSpecifiedException('Neither a role name nor default role name were specified.')
         elif not role_name:
             role_name = self.default_role_name
         assume_role_parameters = {

@@ -8,7 +8,7 @@ from cumulogenesis.log_handling import LOGGER as logger
 # raise NotImplementedError()
 
 
-class CloudformationService:
+class CloudformationService(object):
     ''' Instance constructor - requires a pre-configured boto3 Session object '''
     def __init__(self, session_builder):
         self.session_builder = session_builder

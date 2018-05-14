@@ -4,9 +4,10 @@ Provides Organization service
 
 import botocore
 from cumulogenesis import exceptions
+from cumulogenesis import helpers
 from cumulogenesis.log_handling import LOGGER as logger
 
-class OrganizationService:
+class OrganizationService(object):
     '''
     Provides methods for loading Organization information from AWS and
     upserting them.
@@ -42,29 +43,53 @@ class OrganizationService:
         Loads information about OrganizationalUnits into an initialized
         AWS Organization model from AWS.
 
+        The caller is responsible for already having loaded accounts
+        into the Organization model so that account names can be loaded into
+        organizations from account IDs.
+
         It doesn't return anything useful as it's modifying the provided Organization
         model directly.
         '''
         for orgunit_id in organization.ids_to_children[organization.root_parent_id]['orgunits']:
             self._load_orgunit(org_model=organization, orgunit_id=orgunit_id)
+        self._add_orgunit_children_to_parents(org_model=organization)
 
     def load_policies(self, organization):
         '''
-        Not implemented
+        Loads existing policies into organization.policies.
 
-        Should load existing policies into organization.policies.
+        The caller is responsible for ensuring that accounts and orgunits
+        have already been loaded into the Organization model so that policy
+        associations can be loaded into them.
         '''
-        pass
+        list_policies_res = self.client.list_policies(Filter='SERVICE_CONTROL_POLICY')
+        for policy in list_policies_res['Policies']:
+            policy_document = self._get_policy_document(policy_id=policy['Id'])
+            policy_model = {"name": policy["Name"],
+                            "id": policy["Id"],
+                            "description": policy["Description"],
+                            "aws_managed": policy["AwsManaged"],
+                            "document": {"content": policy_document}}
+            organization.policies[policy["Name"]] = policy_model
+            policy_targets_res = self.client.list_targets_for_policy(PolicyId=policy["Id"])
+            for target in policy_targets_res["Targets"]:
+                self._add_policy_to_target(org_model=organization, target=target, policy_name=policy['Name'])
 
     def load_accounts(self, organization):
         '''
-        Not implemented
-
-        Should load existing accounts into organization.accounts. It should also
-        update organization.orgunits such that each orgunit's account key is a
-        list of its child account names, mapping from the orgunit's accounts_by_id
-        dict.
+        Loads existing accounts into organization.accounts. It also creates
+        organization.account_ids_to_names with a mapping of account Id values
+        to account Name values, for use by load_orgunits in loading the names
+        of child accounts.
         '''
+        list_accounts_res = self.client.list_accounts()
+        for account in list_accounts_res['Accounts']:
+            account_model = {"name": account["Name"],
+                             "owner": account["Email"],
+                             "account_id": account["Id"],
+                             "regions": []}
+            organization.accounts[account["Name"]] = account_model
+            organization.account_ids_to_names[account["Id"]] = account["Name"]
 
     def upsert_organization(self, organization):
         '''
@@ -84,7 +109,7 @@ class OrganizationService:
 
         The caller is responsible for ensuring that the org is in a suitable
         state for any changes to happen (e.g., that the orgunit's parent exists,
-        child accounts and applicable policies have bene created, etc)
+        child accounts and applicable policies have been created, etc)
         before calling this method.
         '''
         pass
@@ -120,10 +145,12 @@ class OrganizationService:
         orgunit_response = self.client.describe_organizational_unit(
             OrganizationalUnitId=orgunit_id)['OrganizationalUnit']
         orgunit = {"id": orgunit_response['Id'],
-                   "arn": orgunit_response['Arn'],
                    "name": orgunit_response['Name']}
-        orgunit['accounts_by_id'] = org_model.ids_to_children[orgunit_id]['accounts']
+        accounts = [org_model.account_ids_to_names[account_id]
+                    for account_id in org_model.ids_to_children[orgunit_id]['accounts']]
+        orgunit['accounts'] = accounts
         org_model.orgunits[orgunit_response['Name']] = orgunit
+        org_model.orgunit_ids_to_names[orgunit_response['Id']] = orgunit_response['Name']
         for child_orgunit_id in org_model.ids_to_children[orgunit_id]['orgunits']:
             self._load_orgunit(org_model=org_model, orgunit_id=child_orgunit_id)
 
@@ -156,3 +183,30 @@ class OrganizationService:
             for orgunit in orgunit_children['Children']:
                 org_model.ids_to_children[parent]['orgunits'].append(orgunit['Id'])
                 self._set_org_ids_to_children(org_model=org_model, parent=orgunit['Id'])
+
+    @staticmethod
+    def _add_orgunit_children_to_parents(org_model):
+        for orgunit_name in org_model.orgunits:
+            orgunit_id = org_model.orgunits[orgunit_name]['id']
+            child_orgunits = [org_model.orgunit_ids_to_names[child_id]
+                              for child_id in org_model.ids_to_children[orgunit_id]['orgunits']]
+            org_model.orgunits[orgunit_name]['child_orgunits'] = child_orgunits
+
+    @staticmethod
+    def _add_policy_to_target(org_model, target, policy_name):
+        if target['Type'] == 'ROOT':
+            org_model.root_policies.append(policy_name)
+        else:
+            if target['Type'] == 'ACCOUNT':
+                target_dict = org_model.accounts
+            elif target['Type'] == 'ORGANIZATIONAL_UNIT':
+                target_dict = org_model.orgunits
+            if target['Name'] in target_dict:
+                if not 'policies' in target_dict[target['Name']]:
+                    target_dict[target['Name']]['policies'] = []
+                target_dict[target['Name']]['policies'].append(policy_name)
+
+    def _get_policy_document(self, policy_id):
+        describe_policy_response = self.client.describe_policy(PolicyId=policy_id)
+        document = helpers.ordered_yaml_load(describe_policy_response['Policy']['Content'])
+        return document

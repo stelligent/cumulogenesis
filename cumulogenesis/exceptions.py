@@ -72,6 +72,16 @@ class RoleNameNotSpecifiedException(Exception):
     '''
     pass
 
+class NotAwsModelException(Exception):
+    '''
+    Indicates that a method was called on a model that assumes the source for the model
+    was the AWS API when the method is only intended to be used with an AWS model
+    e.g., loading it from what currently exists or converging differences.
+    '''
+    def __init__(self, method):
+        message = '%s was called on a model that was not initialized with a source of "aws"' % method
+        Exception.__init__(self, message)
+
 class OrganizationMemberAccountException(Exception):
     '''
     Indicates that the account is already a member account of an organization and so

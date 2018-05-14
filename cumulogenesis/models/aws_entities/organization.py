@@ -7,7 +7,7 @@ from cumulogenesis.services.organization import OrganizationService
 from cumulogenesis.services.cloudformation import CloudformationService
 
 # pylint: disable=too-many-instance-attributes
-class Organization:
+class Organization(object):
     '''
     Models an AWS Organization entitiy
     '''
@@ -15,9 +15,10 @@ class Organization:
         self.root_account_id = root_account_id
         self.featureset = None
         self.accounts = {}
-        self.account_ids_to_parents = {}
+        self.account_ids_to_names = {}
         self.policies = {}
         self.orgunits = {}
+        self.orgunit_ids_to_names = {}
         self.ids_to_children = {}
         self.stacks = {}
         self.groups = None
@@ -28,6 +29,7 @@ class Organization:
         self.aws_model = None
         self.exists = True
         self.root_parent_id = None
+        self.root_policies = []
         self.org_id = None
         super(Organization).__init__()
 
@@ -99,6 +101,8 @@ class Organization:
         '''
         Builds out the Organization model from what exists in AWS
         '''
+        if self.source != "aws":
+            raise exceptions.NotAwsModelException('load()')
         self._load_organization()
         self._load_stacksets()
 
@@ -124,9 +128,9 @@ class Organization:
         session_builder = self._get_session_builder()
         organization_service = OrganizationService(session_builder=session_builder)
         organization_service.load_organization(organization=self)
-        organization_service.load_policies(organization=self)
-        organization_service.load_orgunits(organization=self)
         organization_service.load_accounts(organization=self)
+        organization_service.load_orgunits(organization=self)
+        organization_service.load_policies(organization=self)
 
     def _load_stacksets(self):
         session_builder = self._get_session_builder()
@@ -165,13 +169,11 @@ class Organization:
     def _validate_account(self, account_name):
         problems = []
         account = self.accounts[account_name]
-        if not account['parent_references']:
+        if not account['parent_references'] and not account.get('account_id', None) == self.root_account_id:
             problems.append('orphaned')
         elif len(account['parent_references']) > 1:
             #pylint: disable=line-too-long
             problems.append('referenced as a child of multiple orgunits: %s' % ', '.join(account['parent_references']))
-        if not account['regions']:
-            problems.append('has no regions')
         return problems
 
     def _validate_accounts(self):
@@ -262,6 +264,6 @@ class Organization:
         for account in self.accounts.values():
             # We specifically want to check that parent_references is 0 and not None
             #pylint: disable=len-as-condition
-            if len(account['parent_references']) == 0:
+            if len(account['parent_references']) == 0 and not account.get('account_id', None) == self.root_account_id:
                 orphaned_accounts.append(account['name'])
         return orphaned_accounts

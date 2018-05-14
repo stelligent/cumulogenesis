@@ -8,7 +8,7 @@ from cumulogenesis.models.aws_entities import Organization
 from cumulogenesis.log_handling import LOGGER as logger
 from cumulogenesis import exceptions
 
-class DefaultConfigLoader:
+class DefaultConfigLoader(object):
     '''
     Provides methods for loading organization models from config
     and dumping them back to the same config scheme.
@@ -18,10 +18,11 @@ class DefaultConfigLoader:
                            {'name': 'owner', 'type': str},
                            {'name': 'groups', 'type': list, 'optional': True},
                            {'name': 'accountid', 'type': str, 'optional': True},
-                           {'name': 'regions', 'type': list}]
+                           {'name': 'regions', 'type': dict}]
     _policy_parameters = [{'name': 'name', 'type': str},
                           {'name': 'description', 'type': str},
-                          {'name': 'document', 'type': dict}]
+                          {'name': 'document', 'type': dict},
+                          {'name': 'aws_managed', 'type': bool, 'optional': True}]
     _provisioner_parameters = [{'name': 'role', 'type': str, 'optional': True},
                                {'name': 'type', 'type': str, 'optional': True}]
     _policy_document_parameters = [{'name': 'location', 'type': str},
@@ -239,16 +240,21 @@ class DefaultConfigLoader:
                          "account_id": "account_id",
                          "regions": "regions"}
         for account in accounts.values():
-            accounts_list.append(self._render_from_map(source=account, attribute_map=attribute_map))
+            rendered_account = self._render_from_map(source=account, attribute_map=attribute_map)
+            if 'regions' not in rendered_account:
+                rendered_account['regions'] = {}
+            accounts_list.append(rendered_account)
         return accounts_list
 
     def _render_policies(self, policies):
         policies_list = []
         attribute_map = {"name": "name",
                          "description": "description",
-                         "document": "document"}
+                         "document": "document",
+                         "aws_managed": "aws_managed"}
         for policy in policies.values():
-            policies_list.append(self._render_from_map(source=policy, attribute_map=attribute_map))
+            rendered_policy = self._render_from_map(source=policy, attribute_map=attribute_map)
+            policies_list.append(rendered_policy)
         return policies_list
 
     def _render_orgunit(self, orgunit_name, root, orgunits):

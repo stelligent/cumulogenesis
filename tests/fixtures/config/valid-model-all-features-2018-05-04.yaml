@@ -12,19 +12,21 @@ accounts: # list of member accounts to create or invite
     groups:
       - foo-bar-group # arbitrary grouping mechanism for resource provisioning
     regions:
-      - us-east-1
-      - eu-west-2
+      us-east-1: {}
+      eu-west-2:
+        parameters:
+          cloudtrail-bucket: foo-account-cloudtrail
   - name: bar-account
     owner: bar-owner-email@othercompany.com
     groups:
       - foo-bar-group
     regions:
-      - us-east-1
+      us-east-1: {}
   - name: pre-existing-account
     owner: pre-existing-account-owner@othercompany.com
     account_id: '987654321'
     regions:
-      - us-west-2
+      us-west-2: {}
 
 policies: # list of service control policies to create
   - name: no-x-policy
@@ -69,7 +71,4 @@ stacks: # list of resource stacks to create
     accounts:
       - pre-existing-account
     template:
-      content:
-        this:
-          - 'is also'
-          - 'not a real document'
+      location: 's3://another-fake-bucket/and/path'
