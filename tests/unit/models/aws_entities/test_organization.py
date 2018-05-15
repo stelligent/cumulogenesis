@@ -86,8 +86,7 @@ class TestOrganization(unittest.TestCase):
                     "ou_c": {
                         "accounts": ["account_c"]}}}}
         hierarchy = org.get_orgunit_hierarchy()
-        print("Expected:", expected_hierarchy)
-        print("Actual:", hierarchy)
+        helpers.print_expected_actual_diff(expected_hierarchy, hierarchy)
         assert hierarchy == expected_hierarchy
 
 
@@ -117,8 +116,7 @@ class TestOrganization(unittest.TestCase):
                             "ou_b": {"accounts": ["account_b"]}}},
                     "ou_c": {}}}}
         hierarchy = org.get_orgunit_hierarchy()
-        print("Expected:", expected_hierarchy)
-        print("Actual:", hierarchy)
+        helpers.print_expected_actual_diff(expected_hierarchy, hierarchy)
         assert hierarchy == expected_hierarchy
 
     def test_regenerate_groups(self):
@@ -140,8 +138,7 @@ class TestOrganization(unittest.TestCase):
             "group_two": {"name": "group_two", "accounts": ["account_b"],
                           "stacks": ["stack_b", "stack_c"]}}
         org.regenerate_groups()
-        print("Expected:", expected_groups)
-        print("Actual:", org.groups)
+        helpers.print_expected_actual_diff(expected_groups, org.groups)
         assert expected_groups == org.groups
 
     def test_validate(self):
@@ -187,8 +184,5 @@ class TestOrganization(unittest.TestCase):
                                             'missing_group': ['references missing group nonexistent'],
                                             'missing_orgunit': ['references missing orgunit nonexistent']}}
             problems = org.validate()
-            print("Expected:")
-            helpers.pretty_print(expected_problems)
-            print("Actual:")
-            helpers.pretty_print(problems)
+            helpers.print_expected_actual_diff(expected_problems, problems)
             assert expected_problems == problems

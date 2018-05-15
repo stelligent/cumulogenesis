@@ -4,6 +4,7 @@ Tests for cumulogenesis.services.organization
 
 import unittest
 from unittest import mock
+from collections import OrderedDict
 import boto3
 from botocore.stub import Stubber
 from cumulogenesis.services.organization import OrganizationService
@@ -121,7 +122,7 @@ class TestOrganizationService(unittest.TestCase):
         '''
         Tests OrganizationService._set_org_ids_to_children
 
-        This tests the enumeration for an effective account hierarchy of:
+        This tests the enumeration for an effective organization hierarchy of:
 
         r-1234:
           orgunits:
@@ -136,8 +137,8 @@ class TestOrganizationService(unittest.TestCase):
         ChildType=ACCOUNT in each iteration of the recursive function.
         '''
         child_orgunit_response1 = {"Children": [{"Id": "ou-123456789"}]}
-        child_account_response2 = {"Children": [{"Id": "123456789"}]}
         child_orgunit_response2 = {"Children": [{"Id": "ou-987654321"}]}
+        child_account_response2 = {"Children": [{"Id": "123456789"}]}
         child_empty_response = {"Children": []}
         response_order = [
             # First iteration: orgunit, account
@@ -156,11 +157,152 @@ class TestOrganizationService(unittest.TestCase):
         org_service = self._get_org_service()
         org_mock = self._get_mock_org(ids_to_children={})
         org_service._set_org_ids_to_children(org_model=org_mock, parent="r-1234")
-        print("Expected:")
-        helpers.pretty_print(expected_ids_to_children)
-        print("\nActual:")
-        helpers.pretty_print(org_mock.ids_to_children)
-        print("\nDifference:")
-        diff = helpers.deep_diff(expected_ids_to_children, org_mock.ids_to_children)
-        helpers.pretty_print(diff)
+        helpers.print_expected_actual_diff(expected_ids_to_children, org_mock.ids_to_children)
         assert expected_ids_to_children == org_mock.ids_to_children
+
+    def test_load_orgunits(self):
+        '''
+        Tests OrganizationService.load_orgunits
+
+        This tests the loading of orgunits for an effective organization hierarchy of:
+
+        r-1234:
+          orgunits:
+            ou-123456789:
+                accounts:
+                    - 123456789
+                orgunits:
+                    ou-987654321: {}
+        '''
+        ids_to_children_mock = {
+            "r-1234": {"orgunits": ["ou-123456789"], "accounts": []},
+            "ou-123456789": {"orgunits": ["ou-987654321"], "accounts": ["123456789"]},
+            "ou-987654321": {"orgunits": [], "accounts": []}}
+        desc_ou_response1 = {
+            "OrganizationalUnit": {
+                "Id": "ou-123456789", "Name": "orgunit_a"}}
+        desc_ou_response2 = {
+            "OrganizationalUnit": {
+                "Id": "ou-987654321", "Name": "orgunit_b"}}
+        for response in [desc_ou_response1, desc_ou_response2]:
+            self.stubber.add_response('describe_organizational_unit', response)
+        account_ids_to_names_mock = {"123456789": "account_a"}
+        orgunit_ids_to_names_mock = {
+            "ou-123456789": "orgunit_a",
+            "ou-987654321": "orgunit_b"}
+        expected_orgunits = {
+            "orgunit_a": {
+                "id": "ou-123456789", "name": "orgunit_a",
+                "child_orgunits": ["orgunit_b"], "accounts": ["account_a"]},
+            "orgunit_b": {
+                "id": "ou-987654321", "name": "orgunit_b",
+                "child_orgunits": [], "accounts": []}}
+        org_mock = self._get_mock_org(ids_to_children=ids_to_children_mock,
+                                      account_ids_to_names=account_ids_to_names_mock,
+                                      orgunit_ids_to_names=orgunit_ids_to_names_mock,
+                                      root_parent_id="r-1234", orgunits={})
+        org_service = self._get_org_service()
+        org_service.load_orgunits(organization=org_mock)
+        helpers.print_expected_actual_diff(expected_orgunits, org_mock.orgunits)
+        assert expected_orgunits == org_mock.orgunits
+
+    def test_load_policies(self):
+        '''
+        Tests OrganizationService.load_policies
+        '''
+        list_policies_response = {
+            "Policies": [
+                {"Id": "p-123456", "Name": "PolicyOne",
+                 "Description": "The first policy", "AwsManaged": True}]}
+        describe_policy_response = {
+            "Policy": {
+                "Content": '{"This": "is a mock JSON document"}'}}
+        #pylint: disable=invalid-name
+        list_targets_for_policy_response = {
+            "Targets": [
+                {"Type": "Mock"}]}
+        self.stubber.add_response('list_policies', list_policies_response)
+        self.stubber.add_response('describe_policy', describe_policy_response)
+        self.stubber.add_response('list_targets_for_policy', list_targets_for_policy_response)
+        expected_document_content = OrderedDict({"This": "is a mock JSON document"})
+        expected_policies = {
+            "PolicyOne": {"id": "p-123456", "description": "The first policy",
+                          "aws_managed": True, "name": "PolicyOne",
+                          "document": {"content": expected_document_content}}}
+        org_mock = self._get_mock_org(policies={})
+        with mock.patch.object(OrganizationService, "_add_policy_to_target") as policy_to_target_mock:
+            org_service = self._get_org_service()
+            org_service.load_policies(organization=org_mock)
+            policy_to_target_mock.assert_called_with(
+                org_model=org_mock, target=list_targets_for_policy_response['Targets'][0],
+                policy_name="PolicyOne")
+            helpers.print_expected_actual_diff(expected_policies, org_mock.policies)
+            assert expected_policies == org_mock.policies
+
+    def test_add_policy_to_target_root(self):
+        '''
+        Tests OrganizationService._add_policy_to_target when the target type is ROOT
+        '''
+        mock_policy_name = "SomePolicy"
+        target_mock = {"Type": "ROOT"}
+        expected_policies = ["SomePolicy"]
+        org_mock = self._get_mock_org(root_policies=[])
+        org_service = self._get_org_service()
+        org_service._add_policy_to_target(org_model=org_mock, target=target_mock,
+                                          policy_name=mock_policy_name)
+        helpers.print_expected_actual_diff(expected_policies, org_mock.root_policies)
+        assert org_mock.root_policies == expected_policies
+
+    def test_add_policy_to_target_account(self):
+        '''
+        Tests OrganizationService._add_policy_to_target when the target type is ACCOUNT
+        '''
+        mock_policy_name = "SomePolicy"
+        target_mock = {"Type": "ACCOUNT", "Name": "account_a"}
+        mock_accounts = {"account_a": {}}
+        expected_accounts = {"account_a": {"policies": [mock_policy_name]}}
+        org_mock = self._get_mock_org(accounts=mock_accounts)
+        org_service = self._get_org_service()
+        org_service._add_policy_to_target(org_model=org_mock, target=target_mock,
+                                          policy_name=mock_policy_name)
+        helpers.print_expected_actual_diff(expected_accounts, org_mock.accounts)
+        assert expected_accounts == org_mock.accounts
+
+    def test_add_policy_to_target_orgunit(self):
+        '''
+        Tests OrganizationService._add_policy_to_target when the target type is ORGANIZATIONAL_UNIT
+        '''
+        mock_policy_name = "SomePolicy"
+        target_mock = {"Type": "ORGANIZATIONAL_UNIT", "Name": "orgunit_a"}
+        mock_orgunits = {"orgunit_a": {}}
+        expected_orgunits = {"orgunit_a": {"policies": [mock_policy_name]}}
+        org_mock = self._get_mock_org(orgunits=mock_orgunits)
+        org_service = self._get_org_service()
+        org_service._add_policy_to_target(org_model=org_mock, target=target_mock,
+                                          policy_name=mock_policy_name)
+        helpers.print_expected_actual_diff(expected_orgunits, org_mock.orgunits)
+        assert expected_orgunits == org_mock.orgunits
+
+    def test_load_accounts(self):
+        '''
+        Tests OrganizationService.load_accounts
+        '''
+        list_accounts_response = {
+            "Accounts": [{
+                "Name": "account_a", "Email": "foo@bar.com",
+                "Id": "123456789"}]}
+        self.stubber.add_response('list_accounts', list_accounts_response)
+        expected_accounts = {
+            "account_a": {
+                "name": "account_a", "owner": "foo@bar.com",
+                "account_id": "123456789", "regions": []}}
+        expected_account_ids_to_names = {
+            "123456789": "account_a"}
+        org_mock = self._get_mock_org(accounts={}, account_ids_to_names={})
+        org_service = self._get_org_service()
+        org_service.load_accounts(org_mock)
+        helpers.print_expected_actual_diff(expected_accounts, org_mock.accounts)
+        assert expected_accounts == org_mock.accounts
+        helpers.print_expected_actual_diff(expected_account_ids_to_names,
+                                           org_mock.account_ids_to_names)
+        assert expected_account_ids_to_names == org_mock.account_ids_to_names

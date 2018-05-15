@@ -47,10 +47,7 @@ class TestConfigModel(unittest.TestCase):
         hierarchy = org_model.get_orgunit_hierarchy()
         assert hierarchy == expected_hierarchy
         rendered_config = config_loader.dump_organization_to_config(org_model, loader_version)
-        print("\nRendered config:\n%s" % pyaml.dump(rendered_config))
-        config_diff = helpers.deep_diff(config, rendered_config)
-        print("Difference between dicts:")
-        helpers.pretty_print(config_diff)
+        helpers.print_expected_actual_diff(config, rendered_config)
         assert dict(rendered_config) == config
 
     def test_invalid_model_orphaned_account_2018_05_04(self):
@@ -71,10 +68,6 @@ class TestConfigModel(unittest.TestCase):
         expected_problems = {"accounts": {"orphaned-account": ["orphaned"]}}
         assert expected_problems == problems
         hierarchy = org_model.get_orgunit_hierarchy()
-        print("Expected hierarchy:")
-        helpers.pretty_print(expected_hierarchy)
-        print("Actual hierarchy:")
-        helpers.pretty_print(hierarchy)
-        assert hierarchy == expected_hierarchy
+        helpers.print_expected_actual_diff(expected_hierarchy, hierarchy)
         with self.assertRaises(exceptions.InvalidOrganizationException):
             config_loader.dump_organization_to_config(org_model, loader_version)

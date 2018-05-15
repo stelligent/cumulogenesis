@@ -62,3 +62,12 @@ def deep_diff(dict1, dict2):
     item1 = _convert_to_dict_if_ordered(dict1)
     item2 = _convert_to_dict_if_ordered(dict2)
     return DeepDiff(item1, item2, ignore_order=True)
+
+def print_expected_actual_diff(expected, actual):
+    print("Expected:")
+    pretty_print(expected)
+    print("\nActual:")
+    pretty_print(actual)
+    print("\nDifference:")
+    diff = deep_diff(expected, actual)
+    pretty_print(diff)
