@@ -5,7 +5,6 @@ edge cases may deserve their own unit tests as well.
 '''
 import unittest
 import pyaml
-from deepdiff import DeepDiff
 import cumulogenesis.loaders.config as config_loader
 from cumulogenesis import helpers
 from cumulogenesis import exceptions
@@ -49,7 +48,7 @@ class TestConfigModel(unittest.TestCase):
         assert hierarchy == expected_hierarchy
         rendered_config = config_loader.dump_organization_to_config(org_model, loader_version)
         print("\nRendered config:\n%s" % pyaml.dump(rendered_config))
-        config_diff = DeepDiff(dict(config), dict(rendered_config), ignore_order=True)
+        config_diff = helpers.deep_diff(config, rendered_config)
         print("Difference between dicts:")
         helpers.pretty_print(config_diff)
         assert dict(rendered_config) == config

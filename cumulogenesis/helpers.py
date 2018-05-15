@@ -4,6 +4,7 @@ Helpers
 from collections import OrderedDict
 import pprint
 import yaml
+from deepdiff import DeepDiff
 
 #pylint: disable=invalid-name
 def ordered_yaml_load(stream, Loader=yaml.Loader, object_pairs_hook=OrderedDict):
@@ -48,3 +49,16 @@ def pretty_print(data, width=120):
     '''
     pprinter = pprint.PrettyPrinter(width=width)
     return pprinter.pprint(data)
+
+def _convert_to_dict_if_ordered(item):
+    if isinstance(item, OrderedDict):
+        item = dict(item)
+    return item
+
+def deep_diff(dict1, dict2):
+    '''
+    Diffs two objects and returns a dict describing the differences
+    '''
+    item1 = _convert_to_dict_if_ordered(dict1)
+    item2 = _convert_to_dict_if_ordered(dict2)
+    return DeepDiff(item1, item2, ignore_order=True)

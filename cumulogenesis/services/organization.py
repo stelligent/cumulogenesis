@@ -28,10 +28,10 @@ class OrganizationService(object):
         '''
         try:
             describe_org_response = self.client.describe_organization()
+            if not describe_org_response['Organization']:
+                organization.exists = False
         except botocore.exceptions.ClientError:
             logger.info("Got an error trying to describe the organization, assuming organization does not exist.")
-            organization.exists = False
-        if not describe_org_response['Organization']:
             organization.exists = False
         if organization.exists:
             self._set_organization_attributes(
