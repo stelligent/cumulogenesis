@@ -9,7 +9,165 @@ from cumulogenesis.services.cloudformation import CloudformationService
 # pylint: disable=too-many-instance-attributes
 class Organization(object):
     '''
-    Models an AWS Organization entitiy
+    Models an AWS Organization entity. Can be created from configuration via
+    #cumulogenesis.loaders.config, or can be loaded as a representation of what
+    currently exists in AWS via #initialize_from_aws
+
+    #### Instance attributes
+
+    ##### Core model attributes
+
+    - `accounts`: The accounts in the Organization represented as a dict of
+    account names to dicts representing the accounts. See Account below.
+    - `featureset`: The feature set that is enabled on the AWS Organization.
+    - `orgunits`: The Organizational Units in the Organization, represented
+    as a dict of orgunit names to dicts representing the orgunits. See Orgunit below.
+    - `policies`: The Service Control Policies in the Organization, represented
+    as a dict of policy names to dicts representing the policies. See Policy below.
+    - `root_account_id`: The ID of the AWS account that is the Organization master.
+    This must be supplied to `__init__` when the model is instantiated.
+    - `root_policies`: A list of Service Control Policies that are applied to
+    the Organization's root.
+    - `stacks`: The stack resources that should exist in the Organization, represented
+    as a dict of stack names to dicts representing the stack resources. See Stack
+    below.
+    - `stack_instances`: The stack instances that should exist per account/region,
+    represented as a list of dicts representing the stack instances. See Stack Instance
+    below.
+
+    ##### Additional attributes
+
+    - `account_ids_to_names`: A dict that maps Account IDs to Account names. Generated
+    when loading an Organization model from AWS.
+    - `aws_model`: An Organization instance created from what exists in AWS
+    when #Organization.load is called.
+    - `exists`: Indicates whether the Organization currently exists in AWS. Set
+    when loading an Organization model from AWS.
+    - `groups`: Deprecated and will be removed in the future.
+    - `ids_to_children`: A dict that maps Organization hierarchy entities (Org root and
+    Orgunits) to child Orgunits and Accounts. Generated when loading an Organization model
+    from AWS.
+    - `org_id`: The ID of the AWS organization. Generated when loading an Organization model
+    from AWS.
+    - `orgunit_ids_to_names`: A dict that maps Orgunit IDs to Orgunit names. Generated
+    when loading an organization model from AWS.
+    - `provisioner`: A dict that contains parameters passed to AWS Service provisioners.
+    Valid keys:
+        - `access_key`: The AWS IAM Access Key to be used when creating `boto3` sessions.
+        When specified, `profile` will be ignored. Requires `secret_key` to also be specified.
+        - `profile`: The AWS CLI profile to use when creating `boto3` sessions.
+        By default, no profile will be passed to `boto3`. Overridden by `access_key` and
+        `secret_key`.
+        - `role`: The name of the Organization role to create for Organization access
+        to member accounts.
+        - `secret_key`: The AWS IAM Secret Key to be used when creatinb `boto3` sessions.
+        Requires `access_key` to also be specified.
+        - `type`: The Stack provisioner engine to use. Defaults to cfn-stack-set.
+    - `raw_config`: An OrderedDict representation of the config passed if the Organization
+    model was initialized from configuration.
+    - `root_parent_id`: The ID of the Organization's root. Generated when loading an
+    Organization model from AWS.
+    - `session_builder`: A #cumulogenesis.services.session.SessionBuilder instance
+    that's passed to other AWS Service instances for building `boto3` sessions.
+    - `source`: A string that represents the source of the Organization model. Valid states:
+        - _config_: Indicates that the model was initialized from configuration.
+        - _aws_: Indicates that the model was initialized from AWS.
+
+    #### Entity Models
+
+    The parameters above contain models of entities and resources with AWS Organizations.
+    The schema of those models are described below.
+
+    ##### Account
+
+    A dict representing an Account in an Organzation.
+
+    ```
+    {
+        "account_id": str(account_id),
+        "name": str(account_name),
+        "owner": str(account_owner),
+        "parent_references": [str(orgunit_name), ...]
+        "policies": [str(policy_name), ...]
+        "regions": {
+            str(region_name): {
+                "parameters": {
+                    str(parameter_name): parameter_value}}}}
+    ```
+
+
+    - `account_id`: The AWS ID of the Account. If loaded from configuration, this
+    indicates that the Account should already exist and should be invited to the
+    Organization rather than being created as a new member. Will always exist when
+    loading the model from AWS.
+    - `name`: The name of the Account.
+    - `owner`: The owner email address associated with the Account.
+    - `parent_references`: A list of Orgunit names that claim this account as a child.
+    Generated when #validate is called. Used to identify problems in the Organization
+    structure such as orphaned Accounts or multiple Orgunits claiming the same Account
+    as a child.
+    - `policies`: A list of Policy names that target the Account.
+    - `regions`: A dict of AWS region names to region configuration. Represents
+    the regions in which all Stack resources targeting the account should have
+    Stack Instances created. Keys of the region dicts follow:
+        - `parameters`: A dict of parameter names to parameter values. A Parameter
+        Store parameter should be created in the region's parameter Stack Instance
+        for each member of this dict. The parameter value may be any type accepted by
+        Parameter Store.
+
+    ##### Orgunit
+
+    A dict representing an Organizational Unit in an Organization.
+
+    ```
+    {
+        "accounts": [str(account_name), ...],
+        "child_orgunits": [str(orgunit_name), ...],
+        "id": str(orgunit_id),
+        "name": str(orgunit_name)
+        "parent_references": [str(orgunit_name), ...],
+        "policies": [str(policy_name), ...]}
+    ```
+
+    - `accounts`: A list of Account names that are children of this Orgunit.
+    - `child_orgunits`: A list of Orgunit names that are children of this Orgunit.
+    - `id`: The ID of this Orgunit. Generated when loading the Orgunit from AWS.
+    - `name`: The name of this Orgunit.
+    - `parent_references`: A list of Orgunit names that claim this Orgunit as a child.
+    Generated when #validate or #get_orgunit_hierarchy are called. Used ot identify
+    problems in the Organization structure such as multiple Orgunits claiming the same
+    Orgunit as a child.
+    - `policies`: A list of Policy names that target this Orgunit.
+
+    ##### Policy
+
+    A dict representing a Service Control Policy attached to an Organization.
+
+    ```
+    {
+        "aws_managed": bool,
+        "description": str(description),
+        "document": {
+            "content": OrderedDict(policy_document) }},
+        "id": str(policy_id),
+        "name": str(policy_name)}
+    ```
+
+    - `aws_managed`: If `True`, indicates that the Policy is managed by AWS. Defaults
+    to `False`.
+    - `description`: The description applied to the Policy.
+    - `document`: A dict representing the Policy Document.
+        - `content`: An OrderedDict representing the contents of the Policy document.
+    - `id`: The AWS ID of the Policy.
+    - `name`: The name of the Policy.
+
+    ##### Stacks
+
+    A dict representing a Stack resource. Not yet fully implemented.
+
+    ##### Stack Instance
+
+    A dict representing an instance of a Stack resource. Not yet fully implemented.
     '''
     def __init__(self, root_account_id, source=None):
         self.root_account_id = root_account_id
@@ -90,7 +248,7 @@ class Organization(object):
     def initialize_aws_model(self):
         '''
         Initializes a new model of the organization loaded from AWS as the
-        Organization's aws_model attribute.
+        Organization's `aws_model` attribute.
         '''
         self.aws_model = Organization(root_account_id=self.root_account_id)
         self.aws_model.source = "aws"

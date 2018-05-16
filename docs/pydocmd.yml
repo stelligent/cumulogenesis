@@ -1,0 +1,60 @@
+site_name: "cumulogenesis"
+
+# This tells pydocmd which pages to generate from which Python modules,
+# functions and classes. At the first level is the page name, below that
+# is a tree of Python member names (modules, classes, etc.) that should be
+# documented. Higher indentation leads to smaller header size.
+#generate:
+#- baz/cool-stuff.md:
+#  - foobar.baz:
+#    - foobar.baz.CoolClass+     # (+ to include members)
+#    - foobar.baz.some_function
+#- baz/more-stuff.md:
+#  - foobar.more++               # (++ to include members, and their members)
+
+generate:
+- cumulogenesis/models/aws_entities.md:
+  - cumulogenesis.models.aws_entities++
+- cumulogenesis/models/aws_entities/organization.md:
+  - cumulogenesis.models.aws_entities.organization++
+- cumulogenesis/loaders/config.md:
+  - cumulogenesis.loaders.config++
+- cumulogenesis/loaders/config_loaders/default_config_loader.md:
+  - cumulogenesis.loaders.config_loaders.default_config_loader++
+- cumulogenesis/services/cloudformation.md:
+  - cumulogenesis.services.cloudformation++
+- cumulogenesis/services/organization.md:
+  - cumulogenesis.services.organization++
+- cumulogenesis/services/session.md:
+  - cumulogenesis.services.session++
+
+# MkDocs pages configuration. The `<<` operator is sugar added by pydocmd
+# that allows you to use an external Markdown file (eg. your project's README)
+# in the documentation. The path must be relative to current working directory.
+pages:
+- Home: index.md << ../README.md
+- AwsEntities:
+  - Organization: cumulogenesis/aws_entities/organization.md
+- Loaders:
+  - Config: cumulogenesis/loaders/config.md
+  - ConfigLoaders:
+      - DefaultConfigLoader: cumulogenesis/loaders/config_loaders/default_config_loader.md
+- Services:
+  - Cloudformation: cumulogenesis/services/cloudformation.md
+  - Organization: cumulogenesis/services/organization.md
+  - Session: cumulogenesis/services/session.md
+
+# These options all show off their default values. You don't have to add
+# them to your configuration if you're fine with the default.
+docs_dir: sources
+gens_dir: _build/pydocmd     # This will end up as the MkDocs 'docs_dir'
+site_dir: _build/site
+theme:    readthedocs
+loader:   pydocmd.loader.PythonLoader
+preprocessor: pydocmd.preprocessor.Preprocessor
+
+# Additional search path for your Python module. If you use Pydocmd from a
+# subdirectory of your project (eg. docs/), you may want to add the parent
+# directory here.
+additional_search_paths:
+- ..

@@ -29,3 +29,21 @@ pipenv install --dev
 ```
 pipenv run tests
 ```
+
+## Generating Documentation
+
+Auto-generated documentation is provided by [pydoc-markdown](https://github.com/NiklasRosenstein/pydoc-markdown). To build the documentation and run a local webserver to view it:
+
+1. Install development dependencies
+
+```
+pipenv install --dev
+```
+
+2. Run the documentation server
+
+```
+pipenv run doc-server
+```
+
+3. Visit https://localhost:8000/ in your browser.
