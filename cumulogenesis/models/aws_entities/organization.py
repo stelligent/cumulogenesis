@@ -1,10 +1,12 @@
 '''
 Provides the Organization AwsEntity model class
 '''
-from cumulogenesis import exceptions
+from collections import OrderedDict
+from cumulogenesis import exceptions, helpers
 from cumulogenesis.services.session import SessionService
 from cumulogenesis.services.organization import OrganizationService
 from cumulogenesis.services.cloudformation import CloudformationService
+from cumulogenesis.log_handling import LOGGER as logger
 
 # pylint: disable=too-many-instance-attributes
 class Organization(object):
@@ -169,8 +171,12 @@ class Organization(object):
 
     A dict representing an instance of a Stack resource. Not yet fully implemented.
     '''
+
+    _comparable_account_attributes = ['account_id', 'name', 'owner', 'policies']
+    _policies_aws_managed = ["FullAWSAccess"]
+
     def __init__(self, root_account_id, source=None):
-        self.root_account_id = root_account_id
+        self.root_account_id = str(root_account_id)
         self.featureset = None
         self.accounts = {}
         self.account_ids_to_names = {}
@@ -190,6 +196,116 @@ class Organization(object):
         self.root_policies = []
         self.org_id = None
         super(Organization).__init__()
+
+    def dry_run(self, provisioner_overrides=None):
+        '''
+        Loads a corresponding model from AWS and generates a report of a comparison
+        against it and actions that would be taken to converge the AWS resources to
+        match this model.
+        '''
+        if provisioner_overrides:
+            for name, value in provisioner_overrides.items():
+                self.provisioner[name] = value
+        report = OrderedDict()
+        self.raise_if_invalid()
+        logger.info("Loading model from existing AWS resources.")
+        self.initialize_aws_model()
+        aws_model_problems = self.aws_model.validate()
+        if aws_model_problems:
+            report['aws_model_problems'] = aws_model_problems
+        report = self.compare_against_aws_model(report=report)
+        logger.warning('dry_run not fully implemented')
+        return report
+
+    def compare_against_aws_model(self, report):
+        '''
+        Compares this Organization model against the already initialized model in
+        loaded in the aws_model attribute and returns a report of required changes
+        to converge.
+        '''
+        report['configured_organization'] = self
+        report['actual_organization'] = self.aws_model
+        report['actions'] = OrderedDict()
+        if not self.aws_model.exists:
+            self._add_action_to_report(report=report, entity_type='organization',
+                                       entity_name='organization', action='create')
+            return report
+        else:
+            self._compare_organizations(report)
+        self._compare_accounts(report)
+        #self._compare_orgunits(report)
+        #self._compare_policies(report)
+        return report
+
+    #pylint: disable=too-many-arguments
+    @staticmethod
+    def _add_action_to_report(report, entity_type, entity_name, action, old_value=None, new_value=None):
+        if not entity_type in report['actions']:
+            report['actions'][entity_type] = OrderedDict()
+        action_dict = {"action": action}
+        if old_value:
+            action_dict['existing_entity'] = old_value
+        if new_value:
+            action_dict['configured_entity'] = new_value
+        report['actions'][entity_type][entity_name] = action_dict
+
+    @staticmethod
+    def _render_comparable_entity(entity, renderable_attributes):
+        comparable_entity = {}
+        for attribute in renderable_attributes:
+            if attribute in entity:
+                comparable_entity[attribute] = entity[attribute]
+        return comparable_entity
+
+    def _compare_organizations(self, report):
+        configured_organization = self.get_organization_configuration()
+        aws_organization = self.aws_model.get_organization_configuration()
+        if helpers.deep_diff(configured_organization, aws_organization):
+            self._add_action_to_report(
+                report=report, entity_type='organization', entity_name='organization',
+                action='update', old_value=aws_organization, new_value=configured_organization)
+
+    def _compare_accounts(self, report):
+        for account in self.accounts:
+            if not account in self.aws_model.accounts:
+                action = 'invite' if 'account_id' in self.accounts[account] else 'create'
+                self._add_action_to_report(
+                    report=report, entity_type='account', entity_name=account,
+                    action=action)
+            else:
+                configured_account = self._render_comparable_entity(
+                    entity=self.accounts[account], renderable_attributes=self._comparable_account_attributes)
+                aws_account = self._render_comparable_entity(
+                    entity=self.aws_model.accounts[account], renderable_attributes=self._comparable_account_attributes)
+                if helpers.deep_diff(configured_account, aws_account):
+                    self._add_action_to_report(
+                        report=report, entity_type='account', entity_name=account,
+                        action='update', old_value=aws_account, new_value=configured_account)
+        for account in self.aws_model.accounts:
+            if not account in self.accounts:
+                if not 'unknown_accounts' in report:
+                    report['unknown_accounts'] = OrderedDict()
+                aws_account = self._render_comparable_entity(
+                    entity=self.aws_model.accounts[account], renderable_attributes=self._comparable_account_attributes)
+                report['unknown_accounts'][account] = aws_account
+
+    def get_organization_configuration(self):
+        '''
+        Returns a dict describing the organization's configuration for use in comparison.
+        '''
+        configuration = {
+            "featureset": self.featureset,
+            "root_policies": self.root_policies}
+        return configuration
+
+    @staticmethod
+    def converge():
+        '''
+        Executes a dry run, then converges the dry run's proposed changes. Returns
+        a report of actions taken.
+        '''
+        logger.warning('converge not implemented')
+        return "Not implemented."
 
     def get_orgunit_hierarchy(self):
         '''
@@ -310,9 +426,7 @@ class Organization(object):
                 problems.append('references missing account %s' % account_name)
             else:
                 self.accounts[account_name]['parent_references'].append(orgunit['name'])
-        for policy_name in orgunit.get('policies', []):
-            if not policy_name in self.policies:
-                problems.append('references missing policy %s' % policy_name)
+        self._validate_policies_on_entity(entity=orgunit, problems=problems)
         return problems
 
     def _validate_orgunits(self):
@@ -324,6 +438,11 @@ class Organization(object):
                 problems[orgunit_name] = orgunit_problems
         return problems
 
+    def _validate_policies_on_entity(self, entity, problems):
+        for policy in entity.get('policies', []):
+            if not policy in self.policies and not policy in self._policies_aws_managed:
+                problems.append('references missing policy %s' % policy)
+
     def _validate_account(self, account_name):
         problems = []
         account = self.accounts[account_name]
@@ -332,6 +451,7 @@ class Organization(object):
         elif len(account['parent_references']) > 1:
             #pylint: disable=line-too-long
             problems.append('referenced as a child of multiple orgunits: %s' % ', '.join(account['parent_references']))
+        self._validate_policies_on_entity(entity=account, problems=problems)
         return problems
 
     def _validate_accounts(self):
@@ -398,7 +518,7 @@ class Organization(object):
             for child in self.orgunits[orgunit_name]['child_orgunits']:
                 root['orgunits'][child] = {}
                 self._append_path(root['orgunits'][child], child)
-        if self.orgunits[orgunit_name]['accounts']:
+        if self.orgunits[orgunit_name].get('accounts', None):
             root['accounts'] = self.orgunits[orgunit_name]['accounts']
 
     def _generate_orgunit_parent_references(self):

@@ -110,5 +110,6 @@ venv.bak/
 *.swp
 *.swo
 .vscode
-docs/*
-!docs/pydocmd.yml
+/docs/*
+!/docs/pydocmd.yml
+/config/

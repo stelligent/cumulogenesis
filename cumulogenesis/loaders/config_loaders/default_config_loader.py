@@ -3,8 +3,7 @@ Provides the DefaultConfigLoader loader class
 '''
 import copy
 from collections import OrderedDict
-#pylint: disable=line-too-long
-from cumulogenesis.models.aws_entities import Organization
+from cumulogenesis.models.aws_entities.organization import Organization
 from cumulogenesis.log_handling import LOGGER as logger
 from cumulogenesis import exceptions
 
@@ -13,11 +12,14 @@ class DefaultConfigLoader(object):
     Provides methods for loading organization models from config
     and dumping them back to the same config scheme.
     '''
+    _default_root_policies = ['FullAWSAccess']
     _default_featureset = 'ALL'
     _account_parameters = [{'name': 'name', 'type': str},
                            {'name': 'owner', 'type': str},
                            {'name': 'groups', 'type': list, 'optional': True},
                            {'name': 'accountid', 'type': str, 'optional': True},
+                           {'name': 'policies', 'type': list, 'optional': True,
+                            'default': ['FullAWSAccess']},
                            {'name': 'regions', 'type': dict}]
     _policy_parameters = [{'name': 'name', 'type': str},
                           {'name': 'description', 'type': str},
@@ -28,7 +30,8 @@ class DefaultConfigLoader(object):
     _policy_document_parameters = [{'name': 'location', 'type': str},
                                    {'name': 'content', 'type': dict}]
     _orgunit_parameters = [{'name': 'name', 'type': str},
-                           {'name': 'policies', 'type': list, 'optional': True},
+                           {'name': 'policies', 'type': list, 'optional': True,
+                            'default': ['FullAWSAccess']},
                            {'name': 'accounts', 'type': list, 'optional': True},
                            {'name': 'orgunits', 'type': list, 'optional': True}]
     _stack_parameters = [{'name': 'name', 'type': str},
@@ -55,6 +58,7 @@ class DefaultConfigLoader(object):
         config['root'] = organization.root_account_id
         config['featureset'] = organization.featureset
         config['version'] = self.config_version
+        config['root_policies'] = organization.root_policies
         if organization.provisioner:
             config['provisioner'] = self._render_provisioner(organization.provisioner)
         if organization.accounts:
@@ -73,9 +77,13 @@ class DefaultConfigLoader(object):
         Creates a new organization from the provided configuration datastructure.
         Returns the created organization.
         '''
-        organization = Organization(root_account_id=config['root'])
+        organization = Organization(root_account_id=str(config['root']))
         organization.source = "config"
         organization.raw_config = config
+        if 'root_policies' in config:
+            organization.root_policies = config['root_policies']
+        else:
+            organization.root_policies = self._default_root_policies
         if 'featureset' in config:
             organization.featureset = config['featureset']
         else:
@@ -113,6 +121,8 @@ class DefaultConfigLoader(object):
                                    parameter=parameter['name'],
                                    expected_type=parameter['type'],
                                    optional=optional)
+            if 'default' in parameter and not parameter['name'] in config:
+                config[parameter['name']] = parameter['default']
 
     def _validate_one_of_parameters(self, config, parent, parameters):
         parameters_set = set([parameter['name'] for parameter in parameters])
@@ -158,6 +168,8 @@ class DefaultConfigLoader(object):
             self._validate_each_parameter(config=account, parent='account',
                                           parameters=self._account_parameters)
             account_parameters = copy.deepcopy(account)
+            if 'account_id' in account_parameters:
+                account_parameters['account_id'] = str(account_parameters['account_id'])
             account_parameters['source'] = 'config'
             accounts.append(account_parameters)
         accounts_by_name = self._list_to_dict_by_names(accounts, 'account')
@@ -238,7 +250,8 @@ class DefaultConfigLoader(object):
                          "owner": "owner",
                          "groups": "groups",
                          "account_id": "account_id",
-                         "regions": "regions"}
+                         "regions": "regions",
+                         "policies": "policies"}
         for account in accounts.values():
             rendered_account = self._render_from_map(source=account, attribute_map=attribute_map)
             if 'regions' not in rendered_account:

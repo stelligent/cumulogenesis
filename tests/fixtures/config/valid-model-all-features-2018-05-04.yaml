@@ -5,6 +5,8 @@ version: '2018-05-04'
 provisioner:
   role: org-bootstrapper # the role name generated in new member accounts used for resource provisioning
   type: cfn-stack-set # if resource stacks are described, use AWS Stack-Sets to provision them
+root_policies:
+  - FullAWSAccess
 
 accounts: # list of member accounts to create or invite
   - name: foo-account # the member account's name
@@ -60,6 +62,8 @@ orgunits: # list of top-level Organizational Units; nested structure represents 
       - name: The Bars
         accounts:
           - bar-account
+        policies:
+          - FullAWSAccess
 
 stacks: # list of resource stacks to create
   - name: core-vpc

@@ -11,6 +11,7 @@ version is provided.
 '''
 from cumulogenesis.loaders.config_loaders.default_config_loader import DefaultConfigLoader
 from cumulogenesis.log_handling import LOGGER as logger
+from cumulogenesis import helpers
 
 _CONFIG_VERSIONS_TO_LOADERS = {
     "default": DefaultConfigLoader,
@@ -41,3 +42,14 @@ def dump_organization_to_config(organization, config_version=None):
     '''
     loader = _get_config_loader_for_version(config_version)
     return loader.dump_organization_to_config(organization)
+
+#pylint: disable=invalid-name
+def load_organization_from_yaml_file(config_file):
+    '''
+    Loads the specified YAML file as an Organization configuration and returns
+    an Organization object from it.
+    '''
+    with open(config_file, "r") as file_handler:
+        config = helpers.ordered_yaml_load(file_handler)
+    org_model = load_organization_from_config(config)
+    return org_model

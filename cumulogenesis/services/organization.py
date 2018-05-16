@@ -86,7 +86,7 @@ class OrganizationService(object):
         for account in list_accounts_res['Accounts']:
             account_model = {"name": account["Name"],
                              "owner": account["Email"],
-                             "account_id": account["Id"],
+                             "account_id": str(account["Id"]),
                              "regions": []}
             organization.accounts[account["Name"]] = account_model
             organization.account_ids_to_names[account["Id"]] = account["Name"]

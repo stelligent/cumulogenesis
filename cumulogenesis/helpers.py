@@ -41,6 +41,7 @@ def ordered_yaml_dump(data, stream=None, Dumper=yaml.Dumper, **kwds):
             yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
             data.items())
     _OrderedDumper.add_representer(OrderedDict, _dict_representer)
+    _OrderedDumper.ignore_aliases = lambda *args: True
     return yaml.dump(data, stream, _OrderedDumper, **kwds)
 
 def pretty_print(data, width=120):
@@ -64,6 +65,9 @@ def deep_diff(dict1, dict2):
     return DeepDiff(item1, item2, ignore_order=True)
 
 def print_expected_actual_diff(expected, actual):
+    '''
+    Pretty prints two objects and their differences after a deep diff
+    '''
     print("Expected:")
     pretty_print(expected)
     print("\nActual:")
@@ -71,3 +75,10 @@ def print_expected_actual_diff(expected, actual):
     print("\nDifference:")
     diff = deep_diff(expected, actual)
     pretty_print(diff)
+
+def write_report(report, output_file):
+    '''
+    Convenience method for writing a report to an output file
+    '''
+    with open(output_file, 'w') as file_handle:
+        file_handle.write(report)

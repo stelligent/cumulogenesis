@@ -19,3 +19,4 @@ python_version = "3.6"
 [scripts]
 tests = "./run-tests.sh"
 doc-server = "./run-documentation-server.sh"
+cumulogenesis = "./cumulogenesis.py"

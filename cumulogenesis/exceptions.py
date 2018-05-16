@@ -91,3 +91,11 @@ class OrganizationMemberAccountException(Exception):
         #pylint: disable=line-too-long
         message = 'The desired root account %s is already a member of an organization with master account %s' % (account_id, master_account_id)
         Exception.__init__(self, message)
+
+class AccessKeyArgumentException(Exception):
+    '''
+    Indicates an error in the provided CLI access key arguments.
+    '''
+    def __init__(self):
+        message = 'Both --access-key and --secret-key must be provided if either is provided.'
+        Exception.__init__(self, message)

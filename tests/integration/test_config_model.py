@@ -4,7 +4,6 @@ This serves as the primary test for the config loader system as well, though
 edge cases may deserve their own unit tests as well.
 '''
 import unittest
-import pyaml
 import cumulogenesis.loaders.config as config_loader
 from cumulogenesis import helpers
 from cumulogenesis import exceptions
@@ -43,12 +42,15 @@ class TestConfigModel(unittest.TestCase):
         expected_hierarchy = self._load_yaml_hierarchy_fixture(fixture_name)
         org_model = config_loader.load_organization_from_config(config)
         problems = org_model.validate()
+        print("Problems:")
+        helpers.pretty_print(problems)
         assert not problems
         hierarchy = org_model.get_orgunit_hierarchy()
         assert hierarchy == expected_hierarchy
         rendered_config = config_loader.dump_organization_to_config(org_model, loader_version)
         helpers.print_expected_actual_diff(config, rendered_config)
-        assert dict(rendered_config) == config
+        difference = helpers.deep_diff(config, rendered_config)
+        assert difference == {}
 
     def test_invalid_model_orphaned_account_2018_05_04(self):
         #pylint: disable=line-too-long

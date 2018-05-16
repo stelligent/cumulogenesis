@@ -27,6 +27,10 @@ generate:
   - cumulogenesis.services.organization++
 - cumulogenesis/services/session.md:
   - cumulogenesis.services.session++
+- cumulogenesis/helpers.md:
+  - cumulogenesis.helpers++
+- cumulogenesis/exceptions.md:
+  - cumulogenesis.exceptions++
 
 # MkDocs pages configuration. The `<<` operator is sugar added by pydocmd
 # that allows you to use an external Markdown file (eg. your project's README)
@@ -35,10 +39,12 @@ pages:
 - Home: index.md << ../README.md
 - AwsEntities:
   - Organization: cumulogenesis/aws_entities/organization.md
+- Exceptions: cumulogenesis/exceptions.md
+- Helpers: cumulogenesis/helpers.md
 - Loaders:
   - Config: cumulogenesis/loaders/config.md
   - ConfigLoaders:
-      - DefaultConfigLoader: cumulogenesis/loaders/config_loaders/default_config_loader.md
+    - DefaultConfigLoader: cumulogenesis/loaders/config_loaders/default_config_loader.md
 - Services:
   - Cloudformation: cumulogenesis/services/cloudformation.md
   - Organization: cumulogenesis/services/organization.md
