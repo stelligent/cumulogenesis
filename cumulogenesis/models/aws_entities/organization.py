@@ -172,7 +172,9 @@ class Organization(object):
     A dict representing an instance of a Stack resource. Not yet fully implemented.
     '''
 
-    _comparable_account_attributes = ['account_id', 'name', 'owner', 'policies']
+    _comparable_account_attributes = ['name', 'policies']
+    _comparable_orgunit_attributes = ['name', 'policies']
+    _comparable_policy_attributes = ['name', 'description', 'document']
     _policies_aws_managed = ["FullAWSAccess"]
 
     def __init__(self, root_account_id, source=None):
@@ -233,8 +235,8 @@ class Organization(object):
         else:
             self._compare_organizations(report)
         self._compare_accounts(report)
-        #self._compare_orgunits(report)
-        #self._compare_policies(report)
+        self._compare_orgunits(report)
+        self._compare_policies(report)
         return report
 
     #pylint: disable=too-many-arguments
@@ -251,10 +253,12 @@ class Organization(object):
 
     @staticmethod
     def _render_comparable_entity(entity, renderable_attributes):
-        comparable_entity = {}
+        comparable_entity = OrderedDict()
         for attribute in renderable_attributes:
             if attribute in entity:
                 comparable_entity[attribute] = entity[attribute]
+                if isinstance(comparable_entity[attribute], dict):
+                    comparable_entity[attribute] = OrderedDict(comparable_entity[attribute])
         return comparable_entity
 
     def _compare_organizations(self, report):
@@ -288,6 +292,140 @@ class Organization(object):
                 aws_account = self._render_comparable_entity(
                     entity=self.aws_model.accounts[account], renderable_attributes=self._comparable_account_attributes)
                 report['unknown_accounts'][account] = aws_account
+        self._compare_account_associations(report)
+
+    def _compare_policies(self, report):
+        for policy in self.policies:
+            if self.policies[policy].get('aws_managed', None):
+                continue
+            if not policy in self.aws_model.policies:
+                self._add_action_to_report(
+                    report=report, entity_type='policy', entity_name=policy,
+                    action='create')
+            else:
+                configured_policy = self._render_comparable_entity(
+                    entity=self.policies[policy], renderable_attributes=self._comparable_policy_attributes)
+                aws_policy = self._render_comparable_entity(
+                    entity=self.aws_model.policies[policy], renderable_attributes=self._comparable_policy_attributes)
+                if helpers.deep_diff(configured_policy, aws_policy):
+                    self._add_action_to_report(
+                        report=report, entity_type='policy', entity_name=policy,
+                        action='update', old_value=aws_policy, new_value=configured_policy)
+        for policy in self.aws_model.policies:
+            if not policy in self.policies:
+                if self.aws_model.policies[policy].get('aws_managed', None):
+                    continue
+                self._add_action_to_report(
+                    report=report, entity_type='policy', entity_name=policy, action='delete')
+
+    @staticmethod
+    def _add_association_to_report(report, entity_type, entity_name, parent_name):
+        action_key = "%s_associations" % entity_type
+        if not action_key in report['actions']:
+            report['actions'][action_key] = OrderedDict()
+        action_dict = {'action': 'associate', 'parent': parent_name}
+        report['actions'][action_key][entity_name] = action_dict
+
+    @staticmethod
+    def _get_association_for_account(org_model, account_name):
+        parent_references = org_model.accounts[account_name]['parent_references']
+        if parent_references:
+            return parent_references[0]
+        return 'root'
+
+    def _compare_account_associations(self, report):
+        for account in self.accounts:
+            if self.accounts[account].get('account_id', None) == self.root_account_id:
+                continue
+            # If the account hasn't yet been created in the AWS model,
+            # add an association entry demonstrating where it should be located
+            # after creation.
+            if not account in self.aws_model.accounts:
+                self._add_association_to_report(
+                    report=report, entity_type='account', entity_name=account,
+                    parent_name=self._get_association_for_account(self, account))
+            else:
+                # If the account has been created but doesn't exist in the hierarchy
+                # where we expect it to, add an association entry demonstrating where
+                # it should be located.
+                configured_parent = self._get_association_for_account(self, account)
+                aws_parent = self._get_association_for_account(self.aws_model, account)
+                if configured_parent != aws_parent:
+                    self._add_association_to_report(
+                        report=report, entity_type='account', entity_name=account,
+                        parent_name=configured_parent)
+        # Any accounts that aren't in the model and are associated with an orgunit
+        # that shouldn't exist should be moved to the root account. A problem
+        # will be added to report['aws_model_problems'] to indicate that the account
+        # will be orphaned.
+        for account in self.aws_model.accounts:
+            if self.aws_model.accounts[account]['account_id'] == self.root_account_id:
+                continue
+            if account not in self.accounts:
+                aws_parent = self._get_association_for_account(self.aws_model, account)
+                if aws_parent != 'root' and aws_parent not in self.orgunits:
+                    self._add_association_to_report(
+                        report=report, entity_type='account',
+                        entity_name=account, parent_name='root')
+                    self._add_orphaned_account_problem_to_report(
+                        report=report, account_name=account, parent_name=aws_parent)
+
+    @staticmethod
+    def _add_orphaned_account_problem_to_report(report, account_name, parent_name):
+        if 'problems' not in report:
+            report['problems'] = {}
+        if 'accounts' not in report['problems']:
+            report['problems']['accounts'] = {}
+        if account_name not in report['problems']['accounts']:
+            report['problems']['accounts'][account_name] = []
+        report['problems']['accounts'][account_name].append(
+            "%s will be orphaned by the removal of parent orgunit %s" % (account_name, parent_name))
+
+    @staticmethod
+    def _get_association_for_orgunit(org_model, orgunit_name):
+        parent_references = org_model.orgunits[orgunit_name]['parent_references']
+        if parent_references:
+            return parent_references[0]
+        return 'root'
+
+    def _compare_orgunit_associations(self, report):
+        # The flow of this function is similar to what's described in the comments
+        # on _compare_account_associations, except we don't need to check for
+        # orgunits that aren't in the model, since we'll fully manage orgunits.
+        for orgunit in self.orgunits:
+            if not orgunit in self.aws_model.orgunits:
+                self._add_association_to_report(
+                    report=report, entity_type='orgunit', entity_name=orgunit,
+                    parent_name=self._get_association_for_orgunit(self, orgunit))
+            else:
+                configured_parent = self._get_association_for_orgunit(self, orgunit)
+                aws_parent = self._get_association_for_orgunit(self, orgunit)
+                if configured_parent != aws_parent:
+                    self._add_association_to_report(
+                        report=report, entity_type='orgunit', entity_name=orgunit,
+                        parent_name=configured_parent)
+
+    def _compare_orgunits(self, report):
+        for orgunit in self.orgunits:
+            if not orgunit in self.aws_model.orgunits:
+                self._add_action_to_report(
+                    report=report, entity_type='orgunit', entity_name=orgunit,
+                    action='create')
+            else:
+                configured_orgunit = self._render_comparable_entity(
+                    entity=self.orgunits[orgunit], renderable_attributes=self._comparable_orgunit_attributes)
+                aws_orgunit = self._render_comparable_entity(
+                    entity=self.aws_model.orgunits[orgunit], renderable_attributes=self._comparable_orgunit_attributes)
+                if helpers.deep_diff(configured_orgunit, aws_orgunit):
+                    self._add_action_to_report(
+                        report=report, entity_type='orgunit', entity_name=orgunit,
+                        action='update', old_value=aws_orgunit, new_value=configured_orgunit)
+        for orgunit in self.aws_model.orgunits:
+            if not orgunit in self.orgunits:
+                self._add_action_to_report(
+                    report=report, entity_type='orgunit', entity_name=orgunit,
+                    action='delete')
+        self._compare_orgunit_associations(report)
 
     def get_organization_configuration(self):
         '''
@@ -347,6 +485,7 @@ class Organization(object):
         If no problems are found, returns None
         '''
         problems = {}
+        self._generate_orgunit_parent_references()
         orgunit_problems = self._validate_orgunits()
         if orgunit_problems:
             problems['orgunits'] = orgunit_problems

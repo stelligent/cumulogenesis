@@ -16,7 +16,25 @@ def ordered_yaml_load(stream, Loader=yaml.Loader, object_pairs_hook=OrderedDict)
         '''
         Our custom YAML loader
         '''
-        pass
+        @classmethod
+        def remove_implicit_resolver(cls, tag_to_remove):
+            """
+            Remove implicit resolvers for a particular tag
+
+            Takes care not to modify resolvers in super classes.
+
+            We want to load datetimes as strings, not dates, because we
+            go on to serialise as json which doesn't have the advanced types
+            of yaml, and leads to incompatibilities down the track.
+            """
+            if 'yaml_implicit_resolvers' not in cls.__dict__:
+                cls.yaml_implicit_resolvers = cls.yaml_implicit_resolvers.copy()
+
+            for first_letter, mappings in cls.yaml_implicit_resolvers.items():
+                cls.yaml_implicit_resolvers[first_letter] = [(tag, regexp)
+                                                             for tag, regexp in mappings
+                                                             if tag != tag_to_remove]
+    _OrderedLoader.remove_implicit_resolver('tag:yaml.org,2002:timestamp')
     def _construct_mapping(loader, node):
         loader.flatten_mapping(node)
         return object_pairs_hook(loader.construct_pairs(node))
