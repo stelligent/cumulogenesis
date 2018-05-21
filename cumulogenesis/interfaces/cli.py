@@ -33,24 +33,23 @@ def run():
     log_handling.enable_console_logging(level=args.log_level)
     org_model = config_loader.load_organization_from_yaml_file(args.config_file)
     dry_run_report = org_model.dry_run(provisioner_overrides=provisioner_overrides)
-    _dump_report_organizations(dry_run_report)
+    dry_run_report['configured_organization'] = config_loader.dump_organization_to_config(
+        dry_run_report['configured_organization'])
+    dry_run_report['actual_organization'] = config_loader.dump_organization_to_config(
+        dry_run_report['actual_organization'])
     dry_run_report_yaml = helpers.ordered_yaml_dump(dry_run_report)
     logger.info('Dry run report follows.')
     logger.info(dry_run_report_yaml)
     if args.dry_run_report_file:
         helpers.write_report(report=dry_run_report_yaml, output_file=args.dry_run_report_file)
     if args.converge:
-        converge_report = org_model.converge(provisioner_overrides=provisioner_overrides)
-        _dump_report_organizations(converge_report)
+        converge_report = org_model.converge(dry_run_report=dry_run_report,
+                                             provisioner_overrides=provisioner_overrides)
         converge_report_yaml = helpers.ordered_yaml_dump(converge_report)
         logger.info('Converge report follows.')
         logger.info(converge_report_yaml)
         if args.converge_report_file:
             helpers.write_report(report=converge_report_yaml, output_file=args.converge_report_file)
-
-def _dump_report_organizations(report):
-    for key in ['configured_organization', 'actual_organization']:
-        report[key] = config_loader.dump_organization_to_config(report[key])
 
 def _parse_args():
     parser = argparse.ArgumentParser(description=DESCRIPTION)

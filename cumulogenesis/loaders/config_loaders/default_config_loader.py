@@ -53,7 +53,6 @@ class DefaultConfigLoader(object):
         Creates a config datastructure from the provided organization model.
         Returns the created config datastructure.
         '''
-        organization.raise_if_invalid()
         config = OrderedDict()
         config['root'] = organization.root_account_id
         config['featureset'] = organization.featureset

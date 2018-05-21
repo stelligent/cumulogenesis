@@ -10,6 +10,10 @@ _Opinion:_ Accounts should be used only for a single application or business use
 
 Accounts have `region` parameters, which represent the regions in which resources associated with the account should be provisioned. Resources like Stack Sets will be provisioned against each region for the account, and this cannot be overridden.
 
+### Policies
+
+- When not specified, Orgunit and Account entities will have the `FullAWSAccess` AWS-managed policy attached to them. This policy will be replaced by the user-specified policies if any are specified. If you plan to use deny-only policies, ensure that `FullAWSAccess` is still specified somewhere in the Organization hierarchy.
+
 ## Implemented/To Do
 
 See the [project board](https://github.com/stelligent/cumulogenesis/projects/1).

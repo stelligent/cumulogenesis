@@ -2,6 +2,8 @@
 Provides Organization service
 '''
 
+import json
+import time
 import botocore
 from cumulogenesis import exceptions
 from cumulogenesis import helpers
@@ -91,55 +93,225 @@ class OrganizationService(object):
             organization.accounts[account["Name"]] = account_model
             organization.account_ids_to_names[account["Id"]] = account["Name"]
 
-    def upsert_organization(self, organization):
+    def upsert_organization(self, organization, actions):
         '''
-        Not implemented
-
-        Should update the organization root to match the model or create it
-        if it doesn't exist.
+        Upserts an organization based on the provided actions and organization model.
+        When the provided action is `create`, it will attempt to create the organization.
+        When the provided action is `update`, it will attempt to update the organization.
+        Returns a dict describing the changes that were made.
         '''
-        pass
+        if actions['organization']['action'] == 'create':
+            self._create_organization(org_model=organization)
+            return {"organization": {"change": "created"}}
+        return {}
 
-    def upsert_orgunit(self, organization, orgunit_name):
+    def _create_organization(self, org_model):
+        logger.info('Creating organization.')
+        organization_parameters = {
+            "FeatureSet": org_model.featureset}
+        self.client.create_organization(**organization_parameters)
+        root_parent_id = self._get_root_parent_id(org_model.root_account_id)
+        logger.info('Enabling Service Control Policy policy type.')
+        self.client.enable_policy_type(RootId=root_parent_id,
+                                       PolicyType='SERVICE_CONTROL_POLICY')
+
+    def update_orgunit_policies(self, organization, orgunit_name):
         '''
-        Not implemented
-
-        Should update the orgunit to match the orgunit model dict in the organization model
-        or create if it doesn't exist. Should place the orgunit in the hierarchy appropriately.
-
-        The caller is responsible for ensuring that the org is in a suitable
-        state for any changes to happen (e.g., that the orgunit's parent exists,
-        child accounts and applicable policies have been created, etc)
-        before calling this method.
+        Updates the Service Control Policies associated with an Orgunit.
+        configured model.
         '''
-        pass
+        orgunit_id = organization.updated_model.orgunits[orgunit_name]['id']
+        policies = organization.orgunits[orgunit_name].get('policies', [])
+        aws_model_policies = organization.updated_model.orgunits[orgunit_name].get('policies', [])
+        if policies != aws_model_policies:
+            self.update_entity_policy_attachments(target_id=orgunit_id,
+                                                  old_policies=aws_model_policies,
+                                                  new_policies=policies, org_model=organization)
+        return {}
 
-    def upsert_policy(self, organization, policy_name):
+    def update_entity_policy_attachments(self, org_model, target_id, old_policies, new_policies):
         '''
-        Not implemented
-
-        Should update the policy to match the policy model dict in the organization
-        model, or create it if it doesn't exist.
-
-        The caller is responsible for ensuring that there won't be any
-        unintended side effects (e.g., applying the policy to a orgunit before the
-        org hierarchy has converged, leading the policy to be applied in
-        unexpected places for a period of time).
+        Updates the policies associations for the target entity
         '''
-        pass
+        for policy in new_policies:
+            if policy not in old_policies:
+                logger.info('Adding policy association for %s to target %s', policy, target_id)
+                policy_id = org_model.updated_model.policies[policy]['id']
+                self.client.attach_policy(PolicyId=policy_id, TargetId=target_id)
+        for policy in old_policies:
+            if policy not in new_policies:
+                logger.info('Removing policy association for %s to target %s', policy, target_id)
+                policy_id = org_model.updated_model.policies[policy]['id']
+                self.client.detach_policy(PolicyId=policy_id, TargetId=target_id)
 
-    def upsert_account(self, organization, account_name):
+    @staticmethod
+    def _get_parent_id_for_orgunit(org_model, orgunit_name):
+        if org_model.orgunits[orgunit_name]['parent_references']:
+            parent_id = org_model.orgunits[orgunit_name]['parent_references'][0]
+        else:
+            parent_id = org_model.root_parent_id
+        return parent_id
+
+    def create_orgunit(self, org_model, orgunit_name, parent_name):
         '''
-        Not implemented
+        Creates the specified orgunit from the configured Organization model.
 
-        Should update the account to match the account model dict in the organization
-        model, or create it if it doesn't exist.
-
-        The caller is responsible for ensuring that the org is in a suitable
-        state for any changes to happen (e.g., that any required policies have
-        been created) before calling this method.
+        The caller is responsible for ensuring that the Organization is in
+        the appropriate state for the Organization to be created (e.g.,
+        parent Orgunits have already been created.
         '''
-        pass
+        logger.info('Creating orgunit %s', orgunit_name)
+        if parent_name == 'root':
+            parent_id = org_model.aws_model.root_parent_id
+        else:
+            parent_id = org_model.updated_model.orgunits[parent_name]['id']
+        orgunit_parameters = {
+            # Set the parent ID to the root ID, we'll update it later.
+            'ParentId': parent_id,
+            'Name': org_model.orgunits[orgunit_name]['name']}
+        create_res = self.client.create_organizational_unit(**orgunit_parameters)
+        return create_res['OrganizationalUnit']['Id']
+
+    def _update_orgunit(self, org_model, orgunit_name):
+        logger.info('Updating orgunit %s', orgunit_name)
+        orgunit_parameters = {
+            'OrganizationalUnitId': org_model.updated_model.orgunits[orgunit_name]['id'],
+            'Name': org_model.orgunits[orgunit_name]['name']}
+        update_res = self.client.update_organizational_unit(**orgunit_parameters)
+        return update_res['OrganizationalUnit']['Id']
+
+    def upsert_policy(self, organization, policy_name, action):
+        '''
+        Upserts a Service Control Policy based on the provided actions and organization model.
+        When the provided action is `create`, it will attempt to create the policy.
+        When the provided action is `update`, it will attempt to update the policy to
+        match what's in the configured Organization model.
+        '''
+        if action['action'] == 'create':
+            policy_id = self._create_policy(org_model=organization, policy_name=policy_name)
+            return {'change': 'created', 'id': policy_id}
+        if action['action'] == 'update':
+            policy_id = self._update_policy(org_model=organization, policy_name=policy_name)
+            return {'change': 'updated', 'id': policy_id}
+        return {}
+
+    def _create_policy(self, org_model, policy_name):
+        logger.info('Creating policy %s', policy_name)
+        content_json = json.dumps(org_model.policies[policy_name]['document']['content'])
+        policy_parameters = {
+            'Content': content_json,
+            'Description': org_model.policies[policy_name]['description'],
+            'Name': org_model.policies[policy_name]['name'],
+            'Type': 'SERVICE_CONTROL_POLICY'}
+        create_res = self.client.create_policy(**policy_parameters)
+        return create_res['Policy']['PolicySummary']['Id']
+
+    def delete_policy(self, organization, policy_name):
+        '''
+        Deletes a Service Control Policy from the organization and returns a
+        changes dict for the converge report.
+
+        The caller is responsible for ensuring that all policy attachments have
+        already been removed to ensure successful deletion.
+        '''
+        logger.info('Deleting policy %s', policy_name)
+        policy_id = organization.aws_model.policies[policy_name]['id']
+        self.client.delete_policy(PolicyId=policy_id)
+        return {'change': 'deleted', 'id': policy_id}
+
+    def delete_orgunit(self, organization, orgunit_name):
+        '''
+        Deletes an OrganizationalUnit from the organization and returns a
+        changes dict for the converge report.
+
+        The caller is responsible for ensuring that the Orgunit to be deleted has
+        no child Accounts or Orgunits to ensure successful deletion.
+        '''
+        logger.info('Deleting orgunit %s', orgunit_name)
+        orgunit_id = organization.aws_model.orgunits[orgunit_name]['id']
+        try:
+            self.client.delete_organizational_unit(OrganizationalUnitId=orgunit_id)
+            return {'change': 'deleted', 'id': orgunit_id}
+        except botocore.exceptions.ClientError as err:
+            logger.info('Orgunit %s already deleted.', orgunit_name)
+            logger.info(str(err))
+            return None
+
+    def _update_policy(self, org_model, policy_name):
+        logger.info('Updating policy %s', policy_name)
+        content_json = json.dumps(org_model.policies[policy_name]['document']['content'])
+        policy_parameters = {
+            'Content': content_json,
+            'Description': org_model.policies[policy_name]['description'],
+            'Name': org_model.policies[policy_name]['name'],
+            'PolicyId': org_model.updated_model.policies[policy_name]['id']}
+        update_res = self.client.update_policy(**policy_parameters)
+        return update_res['Policy']['PolicySummary']['Id']
+
+    def create_accounts(self, organization, accounts):
+        '''
+        Creates one or more accounts in the Organization. As account creation
+        is asynchronous, it waits until each account finishes creating, then
+        returns a changes dict for the report.
+        '''
+        creation_statuses = {}
+        for account in accounts:
+            logger.info('Creating account %s', account)
+            create_account_params = {
+                'Email': organization.accounts[account]['owner'],
+                'AccountName': organization.accounts[account]['name']}
+            create_res = self.client.create_account(**create_account_params)
+            creation_statuses[account] = create_res['CreateAccountStatus']
+        self._wait_on_account_creation(creation_statuses)
+        changes = {}
+        for account, status in creation_statuses.items():
+            if status['State'] == 'SUCCEEDED':
+                change = 'created'
+            elif status['State'] == 'FAILED':
+                change = 'failed'
+            else:
+                change = 'unknown'
+            changes[account] = {"change": change}
+            if status == 'failed':
+                changes[account]['reason'] = status['FailureReason']
+        return changes
+
+
+    def _wait_on_account_creation(self, creation_statuses):
+        logger.info('Waiting on account creation to complete.')
+        waiting_accounts = creation_statuses.keys()
+        while waiting_accounts:
+            time.sleep(15)
+            for account in waiting_accounts:
+                request_id = creation_statuses[account]['Id']
+                creation_statuses[account] = self.client.describe_create_account_status(
+                    CreateAccountRequestId=request_id)['CreateAccountStatus']
+            waiting_accounts = [
+                account for account in waiting_accounts
+                if creation_statuses[account]['State'] == 'IN_PROGRESS']
+
+
+    def move_account(self, organization, account_name, parent_name):
+        '''
+        Reassociates an account with a new parent and returns a changes dict
+        for the converge report.
+
+        No change will be made if the account is currently associated with the
+        specified parent.
+        '''
+        logger.info('Associating account %s with parent %s', account_name, parent_name)
+        if parent_name == 'root':
+            dest_parent_id = organization.aws_model.root_parent_id
+        else:
+            dest_parent_id = organization.updated_model.orgunits[parent_name]['id']
+        account_id = organization.updated_model.accounts[account_name]['account_id']
+        list_parents_res = self.client.list_parents(ChildId=account_id)
+        source_parent_id = list_parents_res['Parents'][0]['Id']
+        if dest_parent_id != source_parent_id:
+            self.client.move_account(AccountId=account_id, SourceParentId=source_parent_id,
+                                     DestinationParentId=dest_parent_id)
+            return {"action": "reassociated", "parent": dest_parent_id}
+        return {}
 
     def _load_orgunit(self, org_model, orgunit_id):
         orgunit_response = self.client.describe_organizational_unit(

@@ -1,6 +1,7 @@
 '''
 Provides the Organization AwsEntity model class
 '''
+import copy
 from collections import OrderedDict
 from cumulogenesis import exceptions, helpers
 from cumulogenesis.services.session import SessionService
@@ -74,6 +75,8 @@ class Organization(object):
     - `source`: A string that represents the source of the Organization model. Valid states:
         - _config_: Indicates that the model was initialized from configuration.
         - _aws_: Indicates that the model was initialized from AWS.
+    - `updated_model`: An Organization instance created during convergence that reflects
+    changes made during convergence, including items like AWS IDs of newly-created entities.
 
     #### Entity Models
 
@@ -193,6 +196,7 @@ class Organization(object):
         self.session_builder = None
         self.source = source
         self.aws_model = None
+        self.updated_model = None
         self.exists = True
         self.root_parent_id = None
         self.root_policies = []
@@ -216,7 +220,6 @@ class Organization(object):
         if aws_model_problems:
             report['aws_model_problems'] = aws_model_problems
         report = self.compare_against_aws_model(report=report)
-        logger.warning('dry_run not fully implemented')
         return report
 
     def compare_against_aws_model(self, report):
@@ -227,13 +230,13 @@ class Organization(object):
         '''
         report['configured_organization'] = self
         report['actual_organization'] = self.aws_model
+        report['configured_hierarchy'] = self.get_orgunit_hierarchy()
+        report['actual_hierarchy'] = self.aws_model.get_orgunit_hierarchy()
         report['actions'] = OrderedDict()
         if not self.aws_model.exists:
-            self._add_action_to_report(report=report, entity_type='organization',
+            self._add_action_to_report(report=report, entity_type='organizations',
                                        entity_name='organization', action='create')
             return report
-        else:
-            self._compare_organizations(report)
         self._compare_accounts(report)
         self._compare_orgunits(report)
         self._compare_policies(report)
@@ -261,20 +264,12 @@ class Organization(object):
                     comparable_entity[attribute] = OrderedDict(comparable_entity[attribute])
         return comparable_entity
 
-    def _compare_organizations(self, report):
-        configured_organization = self.get_organization_configuration()
-        aws_organization = self.aws_model.get_organization_configuration()
-        if helpers.deep_diff(configured_organization, aws_organization):
-            self._add_action_to_report(
-                report=report, entity_type='organization', entity_name='organization',
-                action='update', old_value=aws_organization, new_value=configured_organization)
-
     def _compare_accounts(self, report):
         for account in self.accounts:
             if not account in self.aws_model.accounts:
                 action = 'invite' if 'account_id' in self.accounts[account] else 'create'
                 self._add_action_to_report(
-                    report=report, entity_type='account', entity_name=account,
+                    report=report, entity_type='accounts', entity_name=account,
                     action=action)
             else:
                 configured_account = self._render_comparable_entity(
@@ -283,7 +278,7 @@ class Organization(object):
                     entity=self.aws_model.accounts[account], renderable_attributes=self._comparable_account_attributes)
                 if helpers.deep_diff(configured_account, aws_account):
                     self._add_action_to_report(
-                        report=report, entity_type='account', entity_name=account,
+                        report=report, entity_type='accounts', entity_name=account,
                         action='update', old_value=aws_account, new_value=configured_account)
         for account in self.aws_model.accounts:
             if not account in self.accounts:
@@ -300,7 +295,7 @@ class Organization(object):
                 continue
             if not policy in self.aws_model.policies:
                 self._add_action_to_report(
-                    report=report, entity_type='policy', entity_name=policy,
+                    report=report, entity_type='policies', entity_name=policy,
                     action='create')
             else:
                 configured_policy = self._render_comparable_entity(
@@ -309,14 +304,14 @@ class Organization(object):
                     entity=self.aws_model.policies[policy], renderable_attributes=self._comparable_policy_attributes)
                 if helpers.deep_diff(configured_policy, aws_policy):
                     self._add_action_to_report(
-                        report=report, entity_type='policy', entity_name=policy,
+                        report=report, entity_type='policies', entity_name=policy,
                         action='update', old_value=aws_policy, new_value=configured_policy)
         for policy in self.aws_model.policies:
             if not policy in self.policies:
                 if self.aws_model.policies[policy].get('aws_managed', None):
                     continue
                 self._add_action_to_report(
-                    report=report, entity_type='policy', entity_name=policy, action='delete')
+                    report=report, entity_type='policies', entity_name=policy, action='delete')
 
     @staticmethod
     def _add_association_to_report(report, entity_type, entity_name, parent_name):
@@ -399,7 +394,7 @@ class Organization(object):
                     parent_name=self._get_association_for_orgunit(self, orgunit))
             else:
                 configured_parent = self._get_association_for_orgunit(self, orgunit)
-                aws_parent = self._get_association_for_orgunit(self, orgunit)
+                aws_parent = self._get_association_for_orgunit(self.aws_model, orgunit)
                 if configured_parent != aws_parent:
                     self._add_association_to_report(
                         report=report, entity_type='orgunit', entity_name=orgunit,
@@ -409,7 +404,7 @@ class Organization(object):
         for orgunit in self.orgunits:
             if not orgunit in self.aws_model.orgunits:
                 self._add_action_to_report(
-                    report=report, entity_type='orgunit', entity_name=orgunit,
+                    report=report, entity_type='orgunits', entity_name=orgunit,
                     action='create')
             else:
                 configured_orgunit = self._render_comparable_entity(
@@ -418,12 +413,12 @@ class Organization(object):
                     entity=self.aws_model.orgunits[orgunit], renderable_attributes=self._comparable_orgunit_attributes)
                 if helpers.deep_diff(configured_orgunit, aws_orgunit):
                     self._add_action_to_report(
-                        report=report, entity_type='orgunit', entity_name=orgunit,
+                        report=report, entity_type='orgunits', entity_name=orgunit,
                         action='update', old_value=aws_orgunit, new_value=configured_orgunit)
         for orgunit in self.aws_model.orgunits:
             if not orgunit in self.orgunits:
                 self._add_action_to_report(
-                    report=report, entity_type='orgunit', entity_name=orgunit,
+                    report=report, entity_type='orgunits', entity_name=orgunit,
                     action='delete')
         self._compare_orgunit_associations(report)
 
@@ -436,14 +431,235 @@ class Organization(object):
             "root_policies": self.root_policies}
         return configuration
 
+    def converge(self, dry_run_report, provisioner_overrides=None):
+        '''
+        Executes the proposed actions in the provided dry run report.
+        Returns a report of actions taken.
+        '''
+        report = OrderedDict()
+        if 'actions' not in dry_run_report:
+            return report
+        report['actions'] = dry_run_report['actions']
+        report['changes'] = OrderedDict()
+        if provisioner_overrides:
+            for name, value in provisioner_overrides.items():
+                self.provisioner[name] = value
+        session_builder = self._get_session_builder()
+        org_service = OrganizationService(session_builder=session_builder)
+        if report['actions'].get('organizations', {}).get('organization', {}).get('action', None) == 'create':
+            self._create_organization(report=report, org_service=org_service)
+            logger.info('Executing dry run to identify changes needed to converge the newly created organization.')
+            new_dry_run_report = self.dry_run()
+            if 'actions' in new_dry_run_report:
+                report['actions'] = OrderedDict({**report['actions'], **new_dry_run_report['actions']})
+        self.updated_model = copy.deepcopy(self.aws_model)
+        self._upsert_policies(report=report, org_service=org_service)
+        self._upsert_root_policy_targets(report=report, org_service=org_service)
+        self._upsert_accounts(report=report, org_service=org_service)
+        self._upsert_orgunits(report=report, org_service=org_service)
+        self._update_account_associations(report=report, org_service=org_service)
+        self._delete_orgunits(report=report, org_service=org_service)
+        self._delete_policies(report=report, org_service=org_service)
+        return report
+
+    def reload_orgunits(self, org_service):
+        '''
+        Reloads the Organization and OrganizationUnit hierarchy in self using
+        the provided OrganizationService
+        '''
+        self.ids_to_children = {}
+        self.orgunits = {}
+        org_service.load_organization(self)
+        org_service.load_orgunits(self)
+
+    def reload_policies(self, org_service):
+        '''
+        Reloads Service Control Policies and policy attachments on self using
+        the provided OrganizationService.
+        '''
+        self.policies = {}
+        org_service.load_policies(self)
+
+    def reload_accounts(self, org_service):
+        '''
+        Reloads accounts on self using the provided OrganizationService.
+        '''
+        self.accounts = {}
+        org_service.load_accounts(self)
+
+    def _create_organization(self, report, org_service):
+        if 'organizations' in report['actions']:
+            changes = org_service.upsert_organization(organization=self,
+                                                      actions=report['actions']['organizations'])
+            if changes:
+                self._add_changes_to_report(report=report, change_type='organizations',
+                                            changes=changes)
+
     @staticmethod
-    def converge():
-        '''
-        Executes a dry run, then converges the dry run's proposed changes. Returns
-        a report of actions taken.
-        '''
-        logger.warning('converge not implemented')
-        return "Not implemented."
+    def _add_changes_to_report(report, change_type, changes):
+        if not 'changes' in report:
+            report['changes'] = OrderedDict()
+        if not change_type in report['changes']:
+            report['changes'][change_type] = OrderedDict(changes)
+        else:
+            report['changes'][change_type] = OrderedDict({**changes, **report['changes'][change_type]})
+
+    def _upsert_policies(self, report, org_service):
+        if 'policies' in report['actions']:
+            upsert_actions = {policy_name: action
+                              for policy_name, action in report['actions']['policies'].items()
+                              if action['action'] != 'delete'}
+            for policy, action in upsert_actions.items():
+                changes = org_service.upsert_policy(
+                    organization=self, policy_name=policy,
+                    action=action)
+                if changes:
+                    self._add_changes_to_report(report=report, change_type='policies',
+                                                changes={policy: changes})
+            org_service.load_policies(organization=self.updated_model)
+
+    def _upsert_root_policy_targets(self, report, org_service):
+        if self.root_policies != self.aws_model.root_policies:
+            org_service.update_entity_policy_attachments(
+                org_model=self, target_id=self.aws_model.root_parent_id,
+                old_policies=self.aws_model.root_policies, new_policies=self.root_policies)
+            changes = {'action': 'updated'}
+            self._add_changes_to_report(report=report, change_type='organizations',
+                                        changes={'root_policies': changes})
+
+    def _upsert_accounts(self, report, org_service):
+        accounts_to_create = [account for account, action in report['actions'].get('accounts', {}).items()
+                              if action['action'] == 'create']
+        if accounts_to_create:
+            changes = org_service.create_accounts(organization=self, accounts=accounts_to_create)
+            if changes:
+                self._add_changes_to_report(report=report, change_type='accounts',
+                                            changes=changes)
+            self.updated_model.reload_accounts(org_service=org_service)
+
+    def _upsert_orgunits(self, report, org_service):
+        if report['actions'].get('orgunit_associations', None):
+            # To naively deal with the problem of changing the orgunit hierarchy
+            # where orgunits can't be moved but can only be created and deleted,
+            # when there's a change to the hierarchy we remove all existing orgunits
+            # and recreate them.
+            self._rebuild_orgunits(org_service=org_service)
+            action_to_verb = {"update": "updated", "create": "created",
+                              "delete": "deleted"}
+            for name, action in report['actions'].get('orgunits', {}).items():
+                orgunit_id = self.updated_model.orgunits[name]['id']
+                self._add_changes_to_report(
+                    report=report, change_type='orgunits',
+                    changes={name: {"change": action_to_verb[action["action"]], "id": orgunit_id}})
+            for name, action in report['actions']['orgunit_associations'].items():
+                self._add_changes_to_report(report=report, change_type='orgunit_associations',
+                                            changes={name: {"change": "associated", "parent": action["parent"]}})
+        elif 'orgunits' in report['actions']:
+            orgunits_to_add = [orgunit for orgunit in report['actions']['orgunits']
+                               if report['actions']['orgunits'][orgunit]['action'] == 'create']
+            top_level_orgunits = [
+                orgunit for orgunit in orgunits_to_add
+                #pylint: disable=line-too-long
+                if not self.orgunits[orgunit]['parent_references'] or self.orgunits[orgunit]['parent_references'][0] in self.aws_model.orgunits]
+            for orgunit in top_level_orgunits:
+                if not self.orgunits[orgunit]['parent_references']:
+                    parent_name = 'root'
+                else:
+                    parent_name = self.orgunits[orgunit]['parent_references'][0]
+                self._create_orgunit(orgunit_name=orgunit, parent_name=parent_name,
+                                     org_service=org_service, report=report)
+            self.updated_model.reload_orgunits(org_service=org_service)
+
+    def _rebuild_orgunits(self, org_service):
+        logger.info("Rebuilding the OrganizationalUnit hierarchy.")
+        for orgunit in self.aws_model.orgunits.values():
+            self._remove_accounts_from_orgunit(orgunit_name=orgunit['name'],
+                                               org_service=org_service)
+        self._remove_orgunits(org_service=org_service)
+        self._create_orgunits(org_service=org_service)
+        self.updated_model.reload_orgunits(org_service=org_service)
+        self.updated_model.reload_policies(org_service=org_service)
+        for orgunit in self.orgunits:
+            org_service.update_orgunit_policies(organization=self, orgunit_name=orgunit)
+            for account in self.orgunits[orgunit].get('accounts', []):
+                if not account in self.updated_model.accounts:
+                    continue
+                org_service.move_account(organization=self, account_name=account,
+                                         parent_name=orgunit)
+
+    def _create_orgunits(self, org_service):
+        root_orgunits = [orgunit for orgunit in self.orgunits
+                         if not self.orgunits[orgunit]['parent_references']]
+        for orgunit in root_orgunits:
+            self._create_orgunit(orgunit_name=orgunit, org_service=org_service,
+                                 parent_name='root')
+
+    def _create_orgunit(self, orgunit_name, org_service, parent_name, report=None):
+        orgunit_id = org_service.create_orgunit(org_model=self, orgunit_name=orgunit_name,
+                                                parent_name=parent_name)
+        if report:
+            self._add_changes_to_report(report=report, change_type='orgunits',
+                                        changes={orgunit_name: {"change": "created", "id": orgunit_id}})
+        self.updated_model.reload_orgunits(org_service=org_service)
+        for child in self.orgunits[orgunit_name].get('child_orgunits', []):
+            self._create_orgunit(orgunit_name=child, org_service=org_service,
+                                 parent_name=orgunit_name, report=report)
+
+    def _remove_orgunit(self, orgunit_name, org_service, report=None):
+        # Recursively deletes the specified orgunit and child orgunits
+        # Assumes that everything is in place for this to happen (e.g.,
+        # the orgunit and its child orgunits have no accounts associated with them)
+        for child in self.aws_model.orgunits[orgunit_name].get('child_orgunits', []):
+            self._remove_orgunit(orgunit_name=child, org_service=org_service, report=report)
+        changes = org_service.delete_orgunit(organization=self, orgunit_name=orgunit_name)
+        if report and changes:
+            self._add_changes_to_report(report=report, change_type='orgunits',
+                                        changes={orgunit_name: changes})
+
+    def _remove_orgunits(self, org_service):
+        root_orgunits = [orgunit for orgunit in self.aws_model.orgunits
+                         if not self.aws_model.orgunits[orgunit]['parent_references']]
+        for orgunit in root_orgunits:
+            # Recursively go through orgunits, deleting child orgunits first
+            # as orgunits cannot have any children prior to being deleted.
+            self._remove_orgunit(orgunit_name=orgunit, org_service=org_service)
+
+    def _remove_accounts_from_orgunit(self, orgunit_name, org_service):
+        logger.info("Moving accounts associated with %s to the organization root temporarily", orgunit_name)
+        for account in self.updated_model.orgunits[orgunit_name].get('accounts', []):
+            org_service.move_account(organization=self, account_name=account,
+                                     parent_name='root')
+
+    def _update_account_associations(self, report, org_service):
+        if 'account_associations' in report['actions']:
+            for account_name, action in report['actions']['account_associations'].items():
+                parent_name = action['parent']
+                changes = org_service.move_account(organization=self, account_name=account_name,
+                                                   parent_name=parent_name)
+                if changes:
+                    self._add_changes_to_report(report=report, change_type='account_associations',
+                                                changes={account_name: changes})
+
+    def _delete_policies(self, report, org_service):
+        if 'policies' in report['actions']:
+            policies_to_delete = [policy_name for policy_name in report['actions']['policies']
+                                  if report['actions']['policies'][policy_name]['action'] == 'delete']
+            for policy_name in policies_to_delete:
+                changes = org_service.delete_policy(organization=self, policy_name=policy_name)
+                if changes:
+                    self._add_changes_to_report(report=report, change_type='policies',
+                                                changes={policy_name: changes})
+
+    def _delete_orgunits(self, report, org_service):
+        if 'orgunits' in report['actions']:
+            orgunits_to_delete = [orgunit_name for orgunit_name in report['actions']['orgunits']
+                                  if report['actions']['orgunits'][orgunit_name]['action'] == 'delete']
+            deleted = []
+            for orgunit_name in orgunits_to_delete:
+                if orgunit_name in deleted:
+                    continue
+                self._remove_orgunit(orgunit_name=orgunit_name, org_service=org_service, report=report)
+                deleted.append(orgunit_name)
 
     def get_orgunit_hierarchy(self):
         '''
@@ -541,9 +757,10 @@ class Organization(object):
         session_builder = self._get_session_builder()
         organization_service = OrganizationService(session_builder=session_builder)
         organization_service.load_organization(organization=self)
-        organization_service.load_accounts(organization=self)
-        organization_service.load_orgunits(organization=self)
-        organization_service.load_policies(organization=self)
+        if self.exists:
+            organization_service.load_accounts(organization=self)
+            organization_service.load_orgunits(organization=self)
+            organization_service.load_policies(organization=self)
 
     def _load_stacksets(self):
         session_builder = self._get_session_builder()
