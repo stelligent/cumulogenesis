@@ -6,7 +6,6 @@ edge cases may deserve their own unit tests as well.
 import unittest
 import cumulogenesis.loaders.config as config_loader
 from cumulogenesis import helpers
-from cumulogenesis import exceptions
 
 class TestConfigModel(unittest.TestCase):
     '''
@@ -64,12 +63,7 @@ class TestConfigModel(unittest.TestCase):
         loader_version = '2018-05-04'
         fixture_name = 'invalid-model-orphaned-account-%s' % loader_version
         config = self._load_yaml_config_fixture(fixture_name)
-        expected_hierarchy = self._load_yaml_hierarchy_fixture(fixture_name)
         org_model = config_loader.load_organization_from_config(config)
         problems = org_model.validate()
         expected_problems = {"accounts": {"orphaned-account": ["orphaned"]}}
         assert expected_problems == problems
-        hierarchy = org_model.get_orgunit_hierarchy()
-        helpers.print_expected_actual_diff(expected_hierarchy, hierarchy)
-        with self.assertRaises(exceptions.InvalidOrganizationException):
-            config_loader.dump_organization_to_config(org_model, loader_version)

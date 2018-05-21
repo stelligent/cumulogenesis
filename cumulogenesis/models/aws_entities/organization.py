@@ -882,7 +882,8 @@ class Organization(object):
             orgunit['parent_references'] = []
         for orgunit in self.orgunits:
             for child in self.orgunits[orgunit]['child_orgunits']:
-                self.orgunits[child]['parent_references'].append(orgunit)
+                if child in self.orgunits:
+                    self.orgunits[child]['parent_references'].append(orgunit)
 
     def _orgunits_to_hierarchy(self):
         self._generate_orgunit_parent_references()
