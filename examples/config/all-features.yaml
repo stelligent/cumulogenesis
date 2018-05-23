@@ -1,0 +1,55 @@
+# This example gives a feel for notable features in deploying organizations
+# Note that any setting with # DUMMY following it is a value that should be replaced
+# appropriately for your organization.
+root: 123456789 # DUMMY; the account ID of the account that should be the Organization master
+featureset: ALL # The feature set to enable on the organization. This can be any value accepted by CreateOrganization
+version: 2018-05-04
+provisioner:
+  profile: cumulogenesis # DUMMY; the name of the AWS CLI profile to use, optional
+accounts:
+  # The organization master account doesn't need to be explicitly defined as below
+  # unless you wish to target it with policies or stack resources.
+  - name: organization_master # DUMMY
+    # The account owner email address for each account must be unique and not used by any other AWS account
+    owner: organization-master@your-organization.com # DUMMY
+    # The account ID must be specified for any existing account that shouldn't be created
+    # automatically for the organization, including the organization master account.
+    account_id: 123456789 # DUMMY
+    regions: {} # While regions is a required parameter for accounts, it isn't yet fully implemented.
+  - name: security # DUMMY
+    owner: security@your-organization.com # DUMMY
+    regions: {}
+  - name: app-prod # DUMMY
+    owner: app-prod@your-organization.com # DUMMY
+    regions: {}
+  - name: app-qa # DUMMY
+    owner: app-qa@your-organization.com # DUMMY
+    regions: {}
+policies:
+  - name: DenyEC2Access
+    description: 'Denies EC2 access'
+    document:
+      content:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Deny
+            Action: "ec2:*"
+            Resource: "*"
+orgunits:
+  - name: security
+    accounts:
+      - security # DUMMY
+    policies:
+      # This applies a policy that denies access to the EC2 service on all
+      # accounts associated with this Organizational Unit
+      - DenyEC2Access
+  - name: app
+    accounts:
+      - app-prod
+    orgunits:
+      # The qa Organizational Unit will have the app orgunit as its parent.
+      # Any policies applied on the app orgunit will be propagated to the child
+      # qa orgunit.
+      - name: qa
+        accounts:
+          - app-qa

@@ -299,7 +299,6 @@ class OrganizationService(object):
         No change will be made if the account is currently associated with the
         specified parent.
         '''
-        logger.info('Associating account %s with parent %s', account_name, parent_name)
         if parent_name == 'root':
             dest_parent_id = organization.aws_model.root_parent_id
         else:
@@ -308,6 +307,7 @@ class OrganizationService(object):
         list_parents_res = self.client.list_parents(ChildId=account_id)
         source_parent_id = list_parents_res['Parents'][0]['Id']
         if dest_parent_id != source_parent_id:
+            logger.info('Associating account %s with parent %s', account_name, parent_name)
             self.client.move_account(AccountId=account_id, SourceParentId=source_parent_id,
                                      DestinationParentId=dest_parent_id)
             return {"action": "reassociated", "parent": dest_parent_id}
