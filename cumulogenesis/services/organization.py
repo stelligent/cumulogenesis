@@ -108,7 +108,6 @@ class OrganizationService(object):
     def update_orgunit_policies(self, organization, orgunit_name):
         '''
         Updates the Service Control Policies associated with an Orgunit.
-        configured model.
         '''
         orgunit_id = organization.updated_model.orgunits[orgunit_name]['id']
         policies = organization.orgunits[orgunit_name].get('policies', [])
@@ -144,7 +143,7 @@ class OrganizationService(object):
         '''
         logger.info('Creating orgunit %s', orgunit_name)
         if parent_name == 'root':
-            parent_id = org_model.aws_model.root_parent_id
+            parent_id = org_model.updated_model.root_parent_id
         else:
             parent_id = org_model.updated_model.orgunits[parent_name]['id']
         orgunit_parameters = {

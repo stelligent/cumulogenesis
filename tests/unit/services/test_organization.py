@@ -12,6 +12,7 @@ from cumulogenesis.models.aws_entities import Organization
 from cumulogenesis import exceptions
 from cumulogenesis import helpers
 
+#pylint: disable=too-many-public-methods
 class TestOrganizationService(unittest.TestCase):
     '''
     Tests for cumulogenesis.services.organization.OrganizationService
@@ -306,3 +307,213 @@ class TestOrganizationService(unittest.TestCase):
         helpers.print_expected_actual_diff(expected_account_ids_to_names,
                                            org_mock.account_ids_to_names)
         assert expected_account_ids_to_names == org_mock.account_ids_to_names
+
+    def test_upsert_organization(self):
+        '''
+        Tests OrganizationService.upsert_organization when the action is create
+        '''
+        actions = {'organization': {'action': 'create'}}
+        list_parents_response = {
+            'Parents': [
+                {'Id': 'r-1234', 'Type': 'ROOT'}]}
+        expected_create_params = {'FeatureSet': 'ALL'}
+        expected_list_parents_params = {'ChildId': '123456789'}
+        expected_enable_policy_params = {
+            'RootId': 'r-1234', 'PolicyType': 'SERVICE_CONTROL_POLICY'}
+        self.stubber.add_response('create_organization', {'Organization': {}},
+                                  expected_create_params)
+        self.stubber.add_response('list_parents', list_parents_response,
+                                  expected_list_parents_params)
+        self.stubber.add_response('enable_policy_type', {'Root': {}},
+                                  expected_enable_policy_params)
+        expected_changes = {"organization": {"change": "created"}}
+        org_mock = self._get_mock_org(featureset='ALL', root_parent_id=None)
+        org_service = self._get_org_service()
+        changes = org_service.upsert_organization(organization=org_mock, actions=actions)
+        helpers.print_expected_actual_diff(expected_changes, changes)
+        assert expected_changes == changes
+
+    def test_upsert_organization_exists(self):
+        '''
+        Tests OrganizationService.upsert_organization when the action is not create
+        '''
+        actions = {'organization': {'action': 'update'}}
+        expected_changes = {}
+        org_mock = self._get_mock_org(featureset='ALL', root_parent_id=None)
+        org_service = self._get_org_service()
+        changes = org_service.upsert_organization(organization=org_mock, actions=actions)
+        helpers.print_expected_actual_diff(expected_changes, changes)
+        assert expected_changes == changes
+
+    def test_update_orgunit_policies(self):
+        '''
+        Tests OrganizationService.update_orgunit_policies with changes
+        '''
+        orgunit_mock = {'orgunit_a': {
+            "id": "ou-123456",
+            "policies": ["foo", "bar"]}}
+        aws_orgunit_mock = {'orgunit_a': {
+            "id": "ou-123456",
+            "policies": ["bar", "baz"]}}
+        aws_org_mock = self._get_mock_org(orgunits=aws_orgunit_mock)
+        org_mock = self._get_mock_org(orgunits=orgunit_mock, aws_model=aws_org_mock, updated_model=aws_org_mock)
+        with mock.patch.object(OrganizationService, 'update_entity_policy_attachments') as update_policy_mock:
+            org_service = self._get_org_service()
+            org_service.update_orgunit_policies(organization=org_mock, orgunit_name="orgunit_a")
+            print(update_policy_mock.call_args_list)
+            update_policy_mock.assert_called_with(
+                new_policies=["foo", "bar"], old_policies=["bar", "baz"],
+                org_model=org_mock, target_id="ou-123456")
+
+    def test_update_orgunit_policies_no_changes(self):
+        '''
+        Tests OrganizationService.update_orgunit_policies with no changes
+        '''
+        orgunit_mock = {'orgunit_a': {
+            "id": "ou-123456",
+            "policies": ["foo", "bar"]}}
+        aws_orgunit_mock = {'orgunit_a': {
+            "id": "ou-123456",
+            "policies": ["foo", "bar"]}}
+        aws_org_mock = self._get_mock_org(orgunits=aws_orgunit_mock)
+        org_mock = self._get_mock_org(orgunits=orgunit_mock, aws_model=aws_org_mock, updated_model=aws_org_mock)
+        with mock.patch.object(OrganizationService, 'update_entity_policy_attachments') as update_policy_mock:
+            org_service = self._get_org_service()
+            org_service.update_orgunit_policies(organization=org_mock, orgunit_name="orgunit_a")
+            update_policy_mock.assert_not_called()
+
+    def test_update_entity_policy_attachments(self):
+        '''
+        Tests OrganizationService.update_entity_policy_attachments
+        '''
+        target_id = 'ou-123456'
+        policies_mock = {
+            "policy_a": {'id': 'p-a'},
+            "policy_b": {'id': 'p-b'},
+            "policy_c": {'id': 'p-c'}}
+        old_policies = ["policy_a", "policy_b"]
+        new_policies = ["policy_b", "policy_c"]
+        expected_attach_parameters = {
+            "PolicyId": "p-c", "TargetId": "ou-123456"}
+        expected_detach_parameters = {
+            "PolicyId": "p-a", "TargetId": "ou-123456"}
+        self.stubber.add_response('attach_policy', {}, expected_attach_parameters)
+        self.stubber.add_response('detach_policy', {}, expected_detach_parameters)
+        updated_org_mock = self._get_mock_org(policies=policies_mock)
+        org_mock = self._get_mock_org(updated_model=updated_org_mock)
+        org_service = self._get_org_service()
+        org_service.update_entity_policy_attachments(
+            target_id=target_id, org_model=org_mock, old_policies=old_policies,
+            new_policies=new_policies)
+
+    def test_create_orgunit_root_parent(self):
+        '''
+        Tests OrganizationService.create_orgunit when the orgunit has the root as its parent
+        '''
+        create_orgunit_response = {
+            "OrganizationalUnit": {"Id": "ou-123456"}}
+        expected_create_orgunit_params = {"ParentId": "r-1234", "Name": "orgunit_a"}
+        self.stubber.add_response(
+            "create_organizational_unit", create_orgunit_response, expected_create_orgunit_params)
+        orgunits_mock = {"orgunit_a": {"name": "orgunit_a"}}
+        updated_org_mock = self._get_mock_org(root_parent_id='r-1234')
+        org_mock = self._get_mock_org(orgunits=orgunits_mock, updated_model=updated_org_mock)
+        org_service = self._get_org_service()
+        orgunit_id = org_service.create_orgunit(org_model=org_mock, orgunit_name="orgunit_a",
+                                                parent_name="root")
+        assert orgunit_id == "ou-123456"
+
+    def test_create_orgunit_orgunit_parent(self):
+        '''
+        Tests OrganizationService.create_orgunit when the orgunit has an orgunit as its parent
+        '''
+        create_orgunit_response = {
+            "OrganizationalUnit": {"Id": "ou-123456"}}
+        expected_create_orgunit_params = {"ParentId": "ou-654321", "Name": "orgunit_a"}
+        self.stubber.add_response(
+            "create_organizational_unit", create_orgunit_response, expected_create_orgunit_params)
+        orgunits_mock = {"orgunit_a": {"name": "orgunit_a"}}
+        updated_orgunits_mock = {"orgunit_b": {"name": "orgunit_b", "id": "ou-654321"}}
+        updated_org_mock = self._get_mock_org(root_parent_id='r-1234', orgunits=updated_orgunits_mock)
+        org_mock = self._get_mock_org(orgunits=orgunits_mock, updated_model=updated_org_mock)
+        org_service = self._get_org_service()
+        orgunit_id = org_service.create_orgunit(org_model=org_mock, orgunit_name="orgunit_a",
+                                                parent_name="orgunit_b")
+        assert orgunit_id == "ou-123456"
+
+    def test_upsert_policy_create(self):
+        '''
+        Tests OrganizationService.upsert_policy when the action is create
+        '''
+        action = {'action': 'create'}
+        policies_mock = {
+            "policy_a": {
+                "name": "policy_a",
+                "description": "policy_a description",
+                "document": {"content": {"foo": "bar"}}}}
+        expected_create_policy_params = {
+            "Content": '{"foo": "bar"}',
+            "Description": "policy_a description",
+            "Name": "policy_a",
+            "Type": "SERVICE_CONTROL_POLICY"}
+        create_policy_response = {
+            "Policy": {"PolicySummary": {"Id": "p-a"}}}
+        expected_changes = {"change": "created", "id": "p-a"}
+        self.stubber.add_response("create_policy", create_policy_response,
+                                  expected_create_policy_params)
+        org_mock = self._get_mock_org(policies=policies_mock)
+        org_service = self._get_org_service()
+        changes = org_service.upsert_policy(
+            organization=org_mock, policy_name="policy_a", action=action)
+        helpers.print_expected_actual_diff(expected_changes, changes)
+        assert changes == expected_changes
+
+    def test_upsert_policy_update(self):
+        '''
+        Tests OrganizationService.upsert_policy when the action is update
+        '''
+        action = {'action': 'update'}
+        updated_policies_mock = {
+            "policy_a": {
+                "id": "p-a",
+                "name": "policy_a",
+                "description": "policy_a description",
+                "document": {"content": {"foo": "bar"}}}}
+        policies_mock = {
+            "policy_a": {
+                "name": "policy_a",
+                "description": "policy_a description",
+                "document": {"content": {"foo": "bar"}}}}
+        expected_update_policy_params = {
+            "Content": '{"foo": "bar"}',
+            "Description": "policy_a description",
+            "Name": "policy_a",
+            "PolicyId": "p-a"}
+        update_policy_response = {
+            "Policy": {"PolicySummary": {"Id": "p-a"}}}
+        expected_changes = {"change": "updated", "id": "p-a"}
+        self.stubber.add_response("update_policy", update_policy_response,
+                                  expected_update_policy_params)
+        updated_org_mock = self._get_mock_org(policies=updated_policies_mock)
+        org_mock = self._get_mock_org(updated_model=updated_org_mock, policies=policies_mock)
+        org_service = self._get_org_service()
+        changes = org_service.upsert_policy(
+            organization=org_mock, policy_name="policy_a", action=action)
+        helpers.print_expected_actual_diff(expected_changes, changes)
+        assert changes == expected_changes
+
+    def test_delete_policy(self):
+        '''
+        Tests OrganizationService.delete_policy
+        '''
+        aws_policies_mock = {
+            "policy_a": {"id": "p-a"}}
+        expected_delete_policy_params = {"PolicyId": "p-a"}
+        expected_changes = {"change": "deleted", "id": "p-a"}
+        self.stubber.add_response("delete_policy", {}, expected_delete_policy_params)
+        aws_org_mock = self._get_mock_org(policies=aws_policies_mock)
+        org_mock = self._get_mock_org(aws_model=aws_org_mock)
+        org_service = self._get_org_service()
+        changes = org_service.delete_policy(organization=org_mock, policy_name="policy_a")
+        helpers.print_expected_actual_diff(expected_changes, changes)
+        assert changes == expected_changes
