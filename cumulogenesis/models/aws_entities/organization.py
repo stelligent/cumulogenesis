@@ -240,6 +240,141 @@ class Organization(object):
         self._compare_policies(report)
         return report
 
+    def get_organization_configuration(self):
+        '''
+        Returns a dict describing the organization's configuration for use in comparison.
+        '''
+        configuration = {
+            "featureset": self.featureset,
+            "root_policies": self.root_policies}
+        return configuration
+
+    def converge(self, dry_run_report, provisioner_overrides=None):
+        '''
+        Executes the proposed actions in the provided dry run report.
+        Returns a report of actions taken.
+        '''
+        report = OrderedDict()
+        if 'actions' not in dry_run_report:
+            return report
+        report['actions'] = dry_run_report['actions']
+        report['changes'] = OrderedDict()
+        if provisioner_overrides:
+            for name, value in provisioner_overrides.items():
+                self.provisioner[name] = value
+        session_builder = self._get_session_builder()
+        org_service = OrganizationService(session_builder=session_builder)
+        if report['actions'].get('organizations', {}).get('organization', {}).get('action', None) == 'create':
+            self._create_organization(report=report, org_service=org_service)
+            logger.info('Executing dry run to identify changes needed to converge the newly created organization.')
+            new_dry_run_report = self.dry_run()
+            if 'actions' in new_dry_run_report:
+                report['actions'] = OrderedDict({**report['actions'], **new_dry_run_report['actions']})
+        self.updated_model = copy.deepcopy(self.aws_model)
+        self._upsert_policies(report=report, org_service=org_service)
+        self._upsert_root_policy_targets(report=report, org_service=org_service)
+        self._upsert_accounts(report=report, org_service=org_service)
+        self._upsert_orgunits(report=report, org_service=org_service)
+        self._update_account_associations(report=report, org_service=org_service)
+        self._delete_orgunits(report=report, org_service=org_service)
+        self._delete_policies(report=report, org_service=org_service)
+        return report
+
+    def reload_orgunits(self, org_service):
+        '''
+        Reloads the Organization and OrganizationUnit hierarchy in self using
+        the provided OrganizationService
+        '''
+        self.ids_to_children = {}
+        self.orgunits = {}
+        org_service.load_organization(self)
+        org_service.load_orgunits(self)
+
+    def reload_policies(self, org_service):
+        '''
+        Reloads Service Control Policies and policy attachments on self using
+        the provided OrganizationService.
+        '''
+        self.policies = {}
+        org_service.load_policies(self)
+
+    def reload_accounts(self, org_service):
+        '''
+        Reloads accounts on self using the provided OrganizationService.
+        '''
+        self.accounts = {}
+        org_service.load_accounts(self)
+
+    def get_orgunit_hierarchy(self):
+        '''
+        Returns a dict representing the hierarchy of accounts and orgunits in the Organization model
+        '''
+        orgunit_hierarchy = self._orgunits_to_hierarchy()
+        # Add orphaned orgunits and accounts to the hierarchy as a separate root key
+        orphaned_accounts = self._find_orphaned_accounts()
+        if orphaned_accounts:
+            orgunit_hierarchy['ORPHANED_ACCOUNTS'] = orphaned_accounts
+        return orgunit_hierarchy
+
+    def raise_if_invalid(self):
+        '''
+        Raises cumulogenesis.exceptions.InvalidOrganizationException if any
+        issues are found with the organization's structure.
+        '''
+        problems = self.validate()
+        if problems:
+            raise exceptions.InvalidOrganizationException(problems)
+
+    def validate(self):
+        '''
+        Inspects the organization's structure and returns a dict of problems.
+        If no problems are found, returns None
+        '''
+        problems = {}
+        self._generate_orgunit_parent_references()
+        orgunit_problems = self._validate_orgunits()
+        if orgunit_problems:
+            problems['orgunits'] = orgunit_problems
+        account_problems = self._validate_accounts()
+        if account_problems:
+            problems['accounts'] = account_problems
+        stack_problems = self._validate_stacksets()
+        if stack_problems:
+            problems['stacks'] = stack_problems
+        return problems
+
+    def initialize_aws_model(self):
+        '''
+        Initializes a new model of the organization loaded from AWS as the
+        Organization's `aws_model` attribute.
+        '''
+        self.aws_model = Organization(root_account_id=self.root_account_id)
+        self.aws_model.source = "aws"
+        self.aws_model.provisioner = self.provisioner
+        self.aws_model.load()
+
+    def load(self):
+        '''
+        Builds out the Organization model from what exists in AWS
+        '''
+        if self.source != "aws":
+            raise exceptions.NotAwsModelException('load()')
+        self._load_organization()
+        self._load_stacksets()
+
+    def _initialize_session_builder(self):
+        session_builder_params = {}
+        if 'access_key' in self.provisioner:
+            session_builder_params["access_key"] = self.provisioner.get('access_key', None)
+            session_builder_params["secret_key"] = self.provisioner.get('secret_key', None)
+        elif 'profile' in self.provisioner:
+            session_builder_params['profile_name'] = self.provisioner['profile']
+        if 'default_region' in self.provisioner:
+            session_builder_params['default_region'] = self.provisioner['default_region']
+        if 'role' in self.provisioner:
+            session_builder_params['default_role_name'] = self.provisioner['role']
+        self.session_builder = SessionService(**session_builder_params)
+
     #pylint: disable=too-many-arguments
     @staticmethod
     def _add_action_to_report(report, entity_type, entity_name, action, old_value=None, new_value=None):
@@ -420,71 +555,6 @@ class Organization(object):
                     action='delete')
         self._compare_orgunit_associations(report)
 
-    def get_organization_configuration(self):
-        '''
-        Returns a dict describing the organization's configuration for use in comparison.
-        '''
-        configuration = {
-            "featureset": self.featureset,
-            "root_policies": self.root_policies}
-        return configuration
-
-    def converge(self, dry_run_report, provisioner_overrides=None):
-        '''
-        Executes the proposed actions in the provided dry run report.
-        Returns a report of actions taken.
-        '''
-        report = OrderedDict()
-        if 'actions' not in dry_run_report:
-            return report
-        report['actions'] = dry_run_report['actions']
-        report['changes'] = OrderedDict()
-        if provisioner_overrides:
-            for name, value in provisioner_overrides.items():
-                self.provisioner[name] = value
-        session_builder = self._get_session_builder()
-        org_service = OrganizationService(session_builder=session_builder)
-        if report['actions'].get('organizations', {}).get('organization', {}).get('action', None) == 'create':
-            self._create_organization(report=report, org_service=org_service)
-            logger.info('Executing dry run to identify changes needed to converge the newly created organization.')
-            new_dry_run_report = self.dry_run()
-            if 'actions' in new_dry_run_report:
-                report['actions'] = OrderedDict({**report['actions'], **new_dry_run_report['actions']})
-        self.updated_model = copy.deepcopy(self.aws_model)
-        self._upsert_policies(report=report, org_service=org_service)
-        self._upsert_root_policy_targets(report=report, org_service=org_service)
-        self._upsert_accounts(report=report, org_service=org_service)
-        self._upsert_orgunits(report=report, org_service=org_service)
-        self._update_account_associations(report=report, org_service=org_service)
-        self._delete_orgunits(report=report, org_service=org_service)
-        self._delete_policies(report=report, org_service=org_service)
-        return report
-
-    def reload_orgunits(self, org_service):
-        '''
-        Reloads the Organization and OrganizationUnit hierarchy in self using
-        the provided OrganizationService
-        '''
-        self.ids_to_children = {}
-        self.orgunits = {}
-        org_service.load_organization(self)
-        org_service.load_orgunits(self)
-
-    def reload_policies(self, org_service):
-        '''
-        Reloads Service Control Policies and policy attachments on self using
-        the provided OrganizationService.
-        '''
-        self.policies = {}
-        org_service.load_policies(self)
-
-    def reload_accounts(self, org_service):
-        '''
-        Reloads accounts on self using the provided OrganizationService.
-        '''
-        self.accounts = {}
-        org_service.load_accounts(self)
-
     def _create_organization(self, report, org_service):
         if 'organizations' in report['actions']:
             changes = org_service.upsert_organization(organization=self,
@@ -658,76 +728,6 @@ class Organization(object):
                     continue
                 self._remove_orgunit(orgunit_name=orgunit_name, org_service=org_service, report=report)
                 deleted.append(orgunit_name)
-
-    def get_orgunit_hierarchy(self):
-        '''
-        Returns a dict representing the hierarchy of accounts and orgunits in the Organization model
-        '''
-        orgunit_hierarchy = self._orgunits_to_hierarchy()
-        # Add orphaned orgunits and accounts to the hierarchy as a separate root key
-        orphaned_accounts = self._find_orphaned_accounts()
-        if orphaned_accounts:
-            orgunit_hierarchy['ORPHANED_ACCOUNTS'] = orphaned_accounts
-        return orgunit_hierarchy
-
-    def raise_if_invalid(self):
-        '''
-        Raises cumulogenesis.exceptions.InvalidOrganizationException if any
-        issues are found with the organization's structure.
-        '''
-        problems = self.validate()
-        if problems:
-            raise exceptions.InvalidOrganizationException(problems)
-
-    def validate(self):
-        '''
-        Inspects the organization's structure and returns a dict of problems.
-        If no problems are found, returns None
-        '''
-        problems = {}
-        self._generate_orgunit_parent_references()
-        orgunit_problems = self._validate_orgunits()
-        if orgunit_problems:
-            problems['orgunits'] = orgunit_problems
-        account_problems = self._validate_accounts()
-        if account_problems:
-            problems['accounts'] = account_problems
-        stack_problems = self._validate_stacksets()
-        if stack_problems:
-            problems['stacks'] = stack_problems
-        return problems
-
-    def initialize_aws_model(self):
-        '''
-        Initializes a new model of the organization loaded from AWS as the
-        Organization's `aws_model` attribute.
-        '''
-        self.aws_model = Organization(root_account_id=self.root_account_id)
-        self.aws_model.source = "aws"
-        self.aws_model.provisioner = self.provisioner
-        self.aws_model.load()
-
-    def load(self):
-        '''
-        Builds out the Organization model from what exists in AWS
-        '''
-        if self.source != "aws":
-            raise exceptions.NotAwsModelException('load()')
-        self._load_organization()
-        self._load_stacksets()
-
-    def _initialize_session_builder(self):
-        session_builder_params = {}
-        if 'access_key' in self.provisioner:
-            session_builder_params["access_key"] = self.provisioner.get('access_key', None)
-            session_builder_params["secret_key"] = self.provisioner.get('secret_key', None)
-        elif 'profile' in self.provisioner:
-            session_builder_params['profile_name'] = self.provisioner['profile']
-        if 'default_region' in self.provisioner:
-            session_builder_params['default_region'] = self.provisioner['default_region']
-        if 'role' in self.provisioner:
-            session_builder_params['default_role_name'] = self.provisioner['role']
-        self.session_builder = SessionService(**session_builder_params)
 
     def _get_session_builder(self):
         if not self.session_builder:

@@ -105,16 +105,6 @@ class OrganizationService(object):
             return {"organization": {"change": "created"}}
         return {}
 
-    def _create_organization(self, org_model):
-        logger.info('Creating organization.')
-        organization_parameters = {
-            "FeatureSet": org_model.featureset}
-        self.client.create_organization(**organization_parameters)
-        root_parent_id = self._get_root_parent_id(org_model.root_account_id)
-        logger.info('Enabling Service Control Policy policy type.')
-        self.client.enable_policy_type(RootId=root_parent_id,
-                                       PolicyType='SERVICE_CONTROL_POLICY')
-
     def update_orgunit_policies(self, organization, orgunit_name):
         '''
         Updates the Service Control Policies associated with an Orgunit.
@@ -144,14 +134,6 @@ class OrganizationService(object):
                 policy_id = org_model.updated_model.policies[policy]['id']
                 self.client.detach_policy(PolicyId=policy_id, TargetId=target_id)
 
-    @staticmethod
-    def _get_parent_id_for_orgunit(org_model, orgunit_name):
-        if org_model.orgunits[orgunit_name]['parent_references']:
-            parent_id = org_model.orgunits[orgunit_name]['parent_references'][0]
-        else:
-            parent_id = org_model.root_parent_id
-        return parent_id
-
     def create_orgunit(self, org_model, orgunit_name, parent_name):
         '''
         Creates the specified orgunit from the configured Organization model.
@@ -172,14 +154,6 @@ class OrganizationService(object):
         create_res = self.client.create_organizational_unit(**orgunit_parameters)
         return create_res['OrganizationalUnit']['Id']
 
-    def _update_orgunit(self, org_model, orgunit_name):
-        logger.info('Updating orgunit %s', orgunit_name)
-        orgunit_parameters = {
-            'OrganizationalUnitId': org_model.updated_model.orgunits[orgunit_name]['id'],
-            'Name': org_model.orgunits[orgunit_name]['name']}
-        update_res = self.client.update_organizational_unit(**orgunit_parameters)
-        return update_res['OrganizationalUnit']['Id']
-
     def upsert_policy(self, organization, policy_name, action):
         '''
         Upserts a Service Control Policy based on the provided actions and organization model.
@@ -194,17 +168,6 @@ class OrganizationService(object):
             policy_id = self._update_policy(org_model=organization, policy_name=policy_name)
             return {'change': 'updated', 'id': policy_id}
         return {}
-
-    def _create_policy(self, org_model, policy_name):
-        logger.info('Creating policy %s', policy_name)
-        content_json = json.dumps(org_model.policies[policy_name]['document']['content'])
-        policy_parameters = {
-            'Content': content_json,
-            'Description': org_model.policies[policy_name]['description'],
-            'Name': org_model.policies[policy_name]['name'],
-            'Type': 'SERVICE_CONTROL_POLICY'}
-        create_res = self.client.create_policy(**policy_parameters)
-        return create_res['Policy']['PolicySummary']['Id']
 
     def delete_policy(self, organization, policy_name):
         '''
@@ -237,17 +200,6 @@ class OrganizationService(object):
             logger.info(str(err))
             return None
 
-    def _update_policy(self, org_model, policy_name):
-        logger.info('Updating policy %s', policy_name)
-        content_json = json.dumps(org_model.policies[policy_name]['document']['content'])
-        policy_parameters = {
-            'Content': content_json,
-            'Description': org_model.policies[policy_name]['description'],
-            'Name': org_model.policies[policy_name]['name'],
-            'PolicyId': org_model.updated_model.policies[policy_name]['id']}
-        update_res = self.client.update_policy(**policy_parameters)
-        return update_res['Policy']['PolicySummary']['Id']
-
     def create_accounts(self, organization, accounts):
         '''
         Creates one or more accounts in the Organization. As account creation
@@ -276,21 +228,6 @@ class OrganizationService(object):
                 changes[account]['reason'] = status['FailureReason']
         return changes
 
-
-    def _wait_on_account_creation(self, creation_statuses):
-        logger.info('Waiting on account creation to complete.')
-        waiting_accounts = creation_statuses.keys()
-        while waiting_accounts:
-            time.sleep(15)
-            for account in waiting_accounts:
-                request_id = creation_statuses[account]['Id']
-                creation_statuses[account] = self.client.describe_create_account_status(
-                    CreateAccountRequestId=request_id)['CreateAccountStatus']
-            waiting_accounts = [
-                account for account in waiting_accounts
-                if creation_statuses[account]['State'] == 'IN_PROGRESS']
-
-
     def move_account(self, organization, account_name, parent_name):
         '''
         Reassociates an account with a new parent and returns a changes dict
@@ -312,6 +249,67 @@ class OrganizationService(object):
                                      DestinationParentId=dest_parent_id)
             return {"action": "reassociated", "parent": dest_parent_id}
         return {}
+
+    def _create_organization(self, org_model):
+        logger.info('Creating organization.')
+        organization_parameters = {
+            "FeatureSet": org_model.featureset}
+        self.client.create_organization(**organization_parameters)
+        root_parent_id = self._get_root_parent_id(org_model.root_account_id)
+        logger.info('Enabling Service Control Policy policy type.')
+        self.client.enable_policy_type(RootId=root_parent_id,
+                                       PolicyType='SERVICE_CONTROL_POLICY')
+
+    @staticmethod
+    def _get_parent_id_for_orgunit(org_model, orgunit_name):
+        if org_model.orgunits[orgunit_name]['parent_references']:
+            parent_id = org_model.orgunits[orgunit_name]['parent_references'][0]
+        else:
+            parent_id = org_model.root_parent_id
+        return parent_id
+
+    def _update_orgunit(self, org_model, orgunit_name):
+        logger.info('Updating orgunit %s', orgunit_name)
+        orgunit_parameters = {
+            'OrganizationalUnitId': org_model.updated_model.orgunits[orgunit_name]['id'],
+            'Name': org_model.orgunits[orgunit_name]['name']}
+        update_res = self.client.update_organizational_unit(**orgunit_parameters)
+        return update_res['OrganizationalUnit']['Id']
+
+    def _create_policy(self, org_model, policy_name):
+        logger.info('Creating policy %s', policy_name)
+        content_json = json.dumps(org_model.policies[policy_name]['document']['content'])
+        policy_parameters = {
+            'Content': content_json,
+            'Description': org_model.policies[policy_name]['description'],
+            'Name': org_model.policies[policy_name]['name'],
+            'Type': 'SERVICE_CONTROL_POLICY'}
+        create_res = self.client.create_policy(**policy_parameters)
+        return create_res['Policy']['PolicySummary']['Id']
+
+    def _update_policy(self, org_model, policy_name):
+        logger.info('Updating policy %s', policy_name)
+        content_json = json.dumps(org_model.policies[policy_name]['document']['content'])
+        policy_parameters = {
+            'Content': content_json,
+            'Description': org_model.policies[policy_name]['description'],
+            'Name': org_model.policies[policy_name]['name'],
+            'PolicyId': org_model.updated_model.policies[policy_name]['id']}
+        update_res = self.client.update_policy(**policy_parameters)
+        return update_res['Policy']['PolicySummary']['Id']
+
+    def _wait_on_account_creation(self, creation_statuses):
+        logger.info('Waiting on account creation to complete.')
+        waiting_accounts = creation_statuses.keys()
+        while waiting_accounts:
+            time.sleep(15)
+            for account in waiting_accounts:
+                request_id = creation_statuses[account]['Id']
+                creation_statuses[account] = self.client.describe_create_account_status(
+                    CreateAccountRequestId=request_id)['CreateAccountStatus']
+            waiting_accounts = [
+                account for account in waiting_accounts
+                if creation_statuses[account]['State'] == 'IN_PROGRESS']
 
     def _load_orgunit(self, org_model, orgunit_id):
         orgunit_response = self.client.describe_organizational_unit(
