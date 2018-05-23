@@ -11,8 +11,6 @@ root_policies:
 accounts: # list of member accounts to create or invite
   - name: foo-account # the member account's name
     owner: foo-owner-email@mycompany.com # the email address used to activate the member account
-    groups:
-      - foo-bar-group # arbitrary grouping mechanism for resource provisioning
     regions:
       us-east-1: {}
       eu-west-2:
@@ -20,8 +18,6 @@ accounts: # list of member accounts to create or invite
           cloudtrail-bucket: foo-account-cloudtrail
   - name: bar-account
     owner: bar-owner-email@othercompany.com
-    groups:
-      - foo-bar-group
     regions:
       us-east-1: {}
   - name: pre-existing-account

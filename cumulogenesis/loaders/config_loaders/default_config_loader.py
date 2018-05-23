@@ -16,7 +16,6 @@ class DefaultConfigLoader(object):
     _default_featureset = 'ALL'
     _account_parameters = [{'name': 'name', 'type': str},
                            {'name': 'owner', 'type': str},
-                           {'name': 'groups', 'type': list, 'optional': True},
                            {'name': 'accountid', 'type': str, 'optional': True},
                            {'name': 'policies', 'type': list, 'optional': True,
                             'default': ['FullAWSAccess']},
@@ -35,7 +34,6 @@ class DefaultConfigLoader(object):
                            {'name': 'accounts', 'type': list, 'optional': True},
                            {'name': 'orgunits', 'type': list, 'optional': True}]
     _stack_parameters = [{'name': 'name', 'type': str},
-                         {'name': 'groups', 'type': list, 'optional': True},
                          {'name': 'accounts', 'type': list, 'optional': True},
                          {'name': 'orgunits', 'type': list, 'optional': True}]
     _stack_target_parameters = [{'name': 'name', 'type': str},
@@ -100,7 +98,6 @@ class DefaultConfigLoader(object):
             organization.orgunits = self._load_orgunits(config['orgunits'])
         if 'stacks' in config:
             organization.stacks = self._load_stacks(config['stacks'])
-        organization.regenerate_groups()
         return organization
 
     @staticmethod
@@ -217,7 +214,7 @@ class DefaultConfigLoader(object):
                                           parameters=self._stack_parameters)
             self._validate_one_of_parameters(config=stack['template'], parent='stack.template',
                                              parameters=self._stack_template_parameters)
-            for key in ['accounts', 'groups', 'orgunits']:
+            for key in ['accounts', 'orgunits']:
                 if key in config:
                     target_name = 'stack.%s' % key
                     self._validate_each_parameter(config=stack, parent=target_name,
@@ -247,7 +244,6 @@ class DefaultConfigLoader(object):
         accounts_list = []
         attribute_map = {"name": "name",
                          "owner": "owner",
-                         "groups": "groups",
                          "account_id": "account_id",
                          "regions": "regions",
                          "policies": "policies"}
@@ -296,7 +292,6 @@ class DefaultConfigLoader(object):
     def _render_stacks(self, stacks):
         stacks_list = []
         attribute_map = {"name": "name",
-                         "groups": "groups",
                          "accounts": "accounts",
                          "orgunits": "orgunits",
                          "template": "template"}

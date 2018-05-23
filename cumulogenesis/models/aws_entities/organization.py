@@ -46,7 +46,6 @@ class Organization(object):
     when #Organization.load is called.
     - `exists`: Indicates whether the Organization currently exists in AWS. Set
     when loading an Organization model from AWS.
-    - `groups`: Deprecated and will be removed in the future.
     - `ids_to_children`: A dict that maps Organization hierarchy entities (Org root and
     Orgunits) to child Orgunits and Accounts. Generated when loading an Organization model
     from AWS.
@@ -190,7 +189,6 @@ class Organization(object):
         self.orgunit_ids_to_names = {}
         self.ids_to_children = {}
         self.stacks = {}
-        self.groups = None
         self.provisioner = None
         self.raw_config = None
         self.session_builder = None
@@ -681,20 +679,6 @@ class Organization(object):
         if problems:
             raise exceptions.InvalidOrganizationException(problems)
 
-    def regenerate_groups(self):
-        '''
-        Rebuilds the groups dict from the current accounts and stacks attributes.
-        '''
-        self.groups = {}
-        for account in self.accounts.values():
-            for group in account.get('groups', []):
-                self._add_entity_to_group(group_name=group, entity_name=account['name'],
-                                          entity_type='accounts')
-        for stack in self.stacks.values():
-            for group in stack.get('groups', []):
-                self._add_entity_to_group(group_name=group, entity_name=stack['name'],
-                                          entity_type='stacks')
-
     def validate(self):
         '''
         Inspects the organization's structure and returns a dict of problems.
@@ -711,9 +695,6 @@ class Organization(object):
         stack_problems = self._validate_stacksets()
         if stack_problems:
             problems['stacks'] = stack_problems
-        group_problems = self._validate_groups()
-        if group_problems:
-            problems['groups'] = group_problems
         return problems
 
     def initialize_aws_model(self):
@@ -827,9 +808,6 @@ class Organization(object):
         for orgunit in stackset.get('orgunits', []):
             if not orgunit in self.orgunits:
                 problems.append('references missing orgunit %s' % orgunit)
-        for group in stackset.get('groups', []):
-            if not group in self.groups:
-                problems.append('references missing group %s' % group)
         return problems
 
     def _validate_stacksets(self):
@@ -839,30 +817,6 @@ class Organization(object):
             if stackset_problems:
                 problems[stackset_name] = stackset_problems
         return problems
-
-    def _validate_group(self, group_name):
-        problems = []
-        group = self.groups[group_name]
-        if not 'accounts' in group or not group['accounts']:
-            problems.append('has no accounts listed')
-        if not 'stacks' in group or not group['stacks']:
-            problems.append('has no stacks listed')
-
-    def _validate_groups(self):
-        problems = {}
-        self.regenerate_groups()
-        for group_name in self.groups:
-            group_problems = self._validate_group(group_name)
-            if group_problems:
-                problems[group_name] = group_problems
-        return problems
-
-    def _add_entity_to_group(self, group_name, entity_name, entity_type):
-        if not group_name in self.groups:
-            self.groups[group_name] = {"name": group_name}
-        if not entity_type in self.groups[group_name]:
-            self.groups[group_name][entity_type] = []
-        self.groups[group_name][entity_type].append(entity_name)
 
     def _append_path(self, root, orgunit_name):
         '''

@@ -119,28 +119,6 @@ class TestOrganization(unittest.TestCase):
         helpers.print_expected_actual_diff(expected_hierarchy, hierarchy)
         assert hierarchy == expected_hierarchy
 
-    def test_regenerate_groups(self):
-        '''
-        Test Organization.regenerate_groups
-        '''
-        accounts_mock = {"account_a": {"groups": ["group_one"]},
-                         "account_b": {"groups": ["group_two"]},
-                         "account_c": {"groups": []}}
-        stacks_mock = {"stack_a": {"groups": ["group_one"]},
-                       "stack_b": {"groups": ["group_two"]},
-                       "stack_c": {"groups": ["group_two"], "accounts": ["account_c"]}}
-        org = self._get_base_organization()
-        org.accounts = self._add_name_to_entity_mocks(accounts_mock)
-        org.stacks = self._add_name_to_entity_mocks(stacks_mock)
-        expected_groups = {
-            "group_one": {"name": "group_one", "accounts": ["account_a"],
-                          "stacks": ["stack_a"]},
-            "group_two": {"name": "group_two", "accounts": ["account_b"],
-                          "stacks": ["stack_b", "stack_c"]}}
-        org.regenerate_groups()
-        helpers.print_expected_actual_diff(expected_groups, org.groups)
-        assert expected_groups == org.groups
-
     def test_validate(self):
         '''
         Test Organization.validate
@@ -156,33 +134,25 @@ class TestOrganization(unittest.TestCase):
                            "policies": [], "child_orgunits": []},
             "valid_ou_b": {"accounts": ["multiple_references"], "policies": [], "child_orgunits": []}}
         accounts_mock = {
-            "orphaned_account": {"parent_references": None, "groups": [], "regions": ["us-east-1"]},
-            "multiple_references": {"parent_references": None, "groups": [], "regions": ["us-east-1"]},
-            "valid_account_a": {"parent_references": None, "groups": [], "regions": ["us-east-1"]}}
+            "orphaned_account": {"parent_references": None, "regions": ["us-east-1"]},
+            "multiple_references": {"parent_references": None, "regions": ["us-east-1"]},
+            "valid_account_a": {"parent_references": None, "regions": ["us-east-1"]}}
         stacks_mock = {
-            "missing_account": {"accounts": ["nonexistent"], "groups": [], "orgunits": []},
-            "missing_orgunit": {"accounts": [], "groups": [], "orgunits": ["nonexistent"]},
-            "valid_stack_a": {"accounts": ["valid_account_a"], "groups": [], "orgunits": []},
-            "missing_group": {"accounts": [], "groups": ["nonexistent"], "orgunits": []}}
-        groups_mock = {"valid_group": {"accounts": ["valid_account_a"], "stacks": ["valid_stack_a"]},
-                       "missing_accounts": {"accounts": [], "stacks": ["valid_stack_a"]},
-                       "missing_stacks": {"accounts": ["valid_account_a"], "stacks": []}}
-        # Patch Organization.regenerate_groups so it doesn't clobber our mock
-        with mock.patch('cumulogenesis.models.aws_entities.Organization.regenerate_groups'):
-            org = self._get_base_organization()
-            org.orgunits = self._add_name_to_entity_mocks(orgunits_mock)
-            org.accounts = self._add_name_to_entity_mocks(accounts_mock)
-            org.stacks = self._add_name_to_entity_mocks(stacks_mock)
-            org.groups = groups_mock
-            expected_problems = {'orgunits': {'missing_account': ['references missing account nonexistent'],
-                                              'missing_orgunit': ['references missing child orgunit nonexistent'],
-                                              'missing_policy': ['references missing policy nonexistent']},
-                                 'accounts': {'orphaned_account': ['orphaned'],
-                                              #pylint: disable=line-too-long
-                                              'multiple_references': ['referenced as a child of multiple orgunits: valid_ou_a, valid_ou_b']},
-                                 'stacks': {'missing_account': ['references missing account nonexistent'],
-                                            'missing_group': ['references missing group nonexistent'],
-                                            'missing_orgunit': ['references missing orgunit nonexistent']}}
-            problems = org.validate()
-            helpers.print_expected_actual_diff(expected_problems, problems)
-            assert expected_problems == problems
+            "missing_account": {"accounts": ["nonexistent"], "orgunits": []},
+            "missing_orgunit": {"accounts": [], "orgunits": ["nonexistent"]},
+            "valid_stack_a": {"accounts": ["valid_account_a"], "orgunits": []}}
+        org = self._get_base_organization()
+        org.orgunits = self._add_name_to_entity_mocks(orgunits_mock)
+        org.accounts = self._add_name_to_entity_mocks(accounts_mock)
+        org.stacks = self._add_name_to_entity_mocks(stacks_mock)
+        expected_problems = {'orgunits': {'missing_account': ['references missing account nonexistent'],
+                                          'missing_orgunit': ['references missing child orgunit nonexistent'],
+                                          'missing_policy': ['references missing policy nonexistent']},
+                             'accounts': {'orphaned_account': ['orphaned'],
+                                          #pylint: disable=line-too-long
+                                          'multiple_references': ['referenced as a child of multiple orgunits: valid_ou_a, valid_ou_b']},
+                             'stacks': {'missing_account': ['references missing account nonexistent'],
+                                        'missing_orgunit': ['references missing orgunit nonexistent']}}
+        problems = org.validate()
+        helpers.print_expected_actual_diff(expected_problems, problems)
+        assert expected_problems == problems

@@ -3,8 +3,8 @@
 This is a tool that allows an AWS Organization to be described in a YAML format and subsequently deployed. Key features:
 
 - Creation and management of AWS Organizations, Organizational Units, Accounts, and Service Control Policies
-- Dry runs that produce reports that demonstrate the expected and existing Organization states and lists the proposed changes to converge the actual Organization state to the expected state.
-- A simple command line interface for both executing dry runs and convergence.
+- Dry runs that produce reports that demonstrate the expected and existing Organization states and list the required changes to converge the actual Organization state to the expected state.
+- A simple command line interface for executing bothdry runs and convergence.
 
 It is implemented in Python 3 and uses [pipenv](https://docs.pipenv.org/) to manage Python virtualenv configuration and dependency management.
 
