@@ -246,7 +246,7 @@ class OrganizationService(object):
             logger.info('Associating account %s with parent %s', account_name, parent_name)
             self.client.move_account(AccountId=account_id, SourceParentId=source_parent_id,
                                      DestinationParentId=dest_parent_id)
-            return {"action": "reassociated", "parent": dest_parent_id}
+            return {"changes": "reassociated", "parent": dest_parent_id}
         return {}
 
     def _create_organization(self, org_model):
@@ -301,7 +301,8 @@ class OrganizationService(object):
         logger.info('Waiting on account creation to complete.')
         waiting_accounts = creation_statuses.keys()
         while waiting_accounts:
-            time.sleep(15)
+            # Wait 10 seconds between checking account statuses
+            time.sleep(10)
             for account in waiting_accounts:
                 request_id = creation_statuses[account]['Id']
                 creation_statuses[account] = self.client.describe_create_account_status(

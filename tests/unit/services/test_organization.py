@@ -517,3 +517,183 @@ class TestOrganizationService(unittest.TestCase):
         changes = org_service.delete_policy(organization=org_mock, policy_name="policy_a")
         helpers.print_expected_actual_diff(expected_changes, changes)
         assert changes == expected_changes
+
+    def test_delete_orgunit_error(self):
+        '''
+        Tests OrganizationService.delete_orgunit
+
+        When a client error is raised when deleting the Orgunit, the method
+        should return None, with the assumption that the Orgunit doesn't exist.
+        '''
+        self.stubber.add_client_error('delete_organizational_unit')
+        orgunit_mock = {"orgunit_a": {"id": "ou-123456"}}
+        aws_org_mock = self._get_mock_org(orgunits=orgunit_mock)
+        org_mock = self._get_mock_org(aws_model=aws_org_mock)
+        org_service = self._get_org_service()
+        result = org_service.delete_orgunit(organization=org_mock, orgunit_name="orgunit_a")
+        helpers.print_expected_actual_diff(None, result)
+        assert result is None
+
+    def test_delete_orgunit(self):
+        '''
+        Tests OrganizationService.delete_orgunit
+        '''
+        expected_delete_orgunit_params = {
+            "OrganizationalUnitId": "ou-123456"}
+        self.stubber.add_response('delete_organizational_unit', {},
+                                  expected_delete_orgunit_params)
+        orgunit_mock = {"orgunit_a": {"id": "ou-123456"}}
+        expected_changes = {"change": "deleted", "id": "ou-123456"}
+        aws_org_mock = self._get_mock_org(orgunits=orgunit_mock)
+        org_mock = self._get_mock_org(aws_model=aws_org_mock)
+        org_service = self._get_org_service()
+        changes = org_service.delete_orgunit(organization=org_mock, orgunit_name="orgunit_a")
+        helpers.print_expected_actual_diff(expected_changes, changes)
+        assert expected_changes == changes
+
+    #pylint: disable=too-many-locals
+    def test_create_accounts(self):
+        '''
+        Tests OrganizationService.create_accounts
+
+        Tests one each of a create account result status where the state is
+        SUCCEEDED, FAILED, or an unknown status.
+        '''
+        account_a_response = {
+            "CreateAccountStatus": {
+                "Id": "req-123456", "AccountName": "account_a", "State": "IN_PROGRESS"}}
+        account_b_response = {
+            "CreateAccountStatus": {
+                "Id": "req-654321", "AccountName": "account_b", "State": "IN_PROGRESS"}}
+        account_c_response = {
+            "CreateAccountStatus": {
+                "Id": "req-456789", "AccountName": "account_c", "State": "IN_PROGRESS"}}
+        account_a_expected_params = {
+            "AccountName": "account_a", "Email": "account_a@example.com"}
+        account_b_expected_params = {
+            "AccountName": "account_b", "Email": "account_b@example.com"}
+        account_c_expected_params = {
+            "AccountName": "account_c", "Email": "account_c@example.com"}
+        self.stubber.add_response('create_account', account_a_response, account_a_expected_params)
+        self.stubber.add_response('create_account', account_b_response, account_b_expected_params)
+        self.stubber.add_response('create_account', account_c_response, account_c_expected_params)
+        accounts_mock = {
+            "account_a": {"owner": "account_a@example.com", "name": "account_a"},
+            "account_b": {"owner": "account_b@example.com", "name": "account_b"},
+            "account_c": {"owner": "account_c@example.com", "name": "account_c"}}
+        accounts_to_create = ['account_a', 'account_b', 'account_c']
+        expected_changes = {
+            "account_a": {"change": "created"},
+            "account_b": {"change": "failed"},
+            "account_c": {"change": "unknown"}}
+        # self is just provided here as the method being mocked is an instance method
+        #pylint: disable=unused-argument
+        def _new_wait_on_account_creation(self, creation_statuses):
+            waiter_response = {
+                "account_a": {"State": "SUCCEEDED"},
+                "account_b": {"State": "FAILED"},
+                "account_c": {"State": "ERROR"}}
+            for account in creation_statuses:
+                creation_statuses[account] = waiter_response[account]
+        with mock.patch.object(OrganizationService, "_wait_on_account_creation",
+                               new=_new_wait_on_account_creation):
+            org_mock = self._get_mock_org(accounts=accounts_mock)
+            org_service = self._get_org_service()
+            changes = org_service.create_accounts(organization=org_mock, accounts=accounts_to_create)
+            helpers.print_expected_actual_diff(expected_changes, changes)
+            assert changes == expected_changes
+
+    def test_wait_on_account_creation(self):
+        '''
+        Tests OrganizationService.wait_on_account_creation
+        '''
+        creation_statuses = {
+            "account_a": {"Id": "req-123456", "State": "IN_PROGRESS"}}
+        in_progress_response = {
+            "CreateAccountStatus": {"Id": "req-123456", "State": "IN_PROGRESS"}}
+        succeeded_response = {
+            "CreateAccountStatus": {"Id": "req-123456", "State": "SUCCEEDED"}}
+        expected_describe_status_params = {"CreateAccountRequestId": "req-123456"}
+        self.stubber.add_response("describe_create_account_status", in_progress_response,
+                                  expected_describe_status_params)
+        self.stubber.add_response("describe_create_account_status", succeeded_response,
+                                  expected_describe_status_params)
+        expected_creation_statuses = {
+            "account_a": {"Id": "req-123456", "State": "SUCCEEDED"}}
+        # Patch time.sleep so we don't actually wait 20 seconds for this test to complete.
+        with mock.patch('cumulogenesis.services.organization.time.sleep'):
+            org_service = self._get_org_service()
+            org_service._wait_on_account_creation(creation_statuses)
+        helpers.print_expected_actual_diff(expected_creation_statuses, creation_statuses)
+        assert expected_creation_statuses == creation_statuses
+
+    def test_move_account_root(self):
+        '''
+        Tests OrganizationService.move_account when the parent_name is root
+        '''
+        updated_accounts_mock = {"account_a": {"account_id": "987654321"}}
+        expected_changes = {"changes": "reassociated", "parent": "r-1234"}
+        list_parents_response = {
+            "Parents": [{"Id": "ou-123456"}]}
+        expected_list_parents_params = {"ChildId": "987654321"}
+        expected_move_account_params = {
+            "AccountId": "987654321", "SourceParentId": "ou-123456",
+            "DestinationParentId": "r-1234"}
+        self.stubber.add_response("list_parents", list_parents_response,
+                                  expected_list_parents_params)
+        self.stubber.add_response("move_account", {}, expected_move_account_params)
+        updated_org_mock = self._get_mock_org(accounts=updated_accounts_mock)
+        aws_org_mock = self._get_mock_org(root_parent_id='r-1234')
+        org_mock = self._get_mock_org(aws_model=aws_org_mock, updated_model=updated_org_mock)
+        org_service = self._get_org_service()
+        changes = org_service.move_account(organization=org_mock, account_name="account_a",
+                                           parent_name="root")
+        helpers.print_expected_actual_diff(expected_changes, changes)
+        assert changes == expected_changes
+
+    def test_move_account_no_change(self):
+        '''
+        Tests OrganizationService.move_account when the source and destination IDs match
+        '''
+        updated_accounts_mock = {"account_a": {"account_id": "987654321"}}
+        expected_changes = {}
+        list_parents_response = {
+            "Parents": [{"Id": "r-1234"}]}
+        expected_list_parents_params = {"ChildId": "987654321"}
+        self.stubber.add_response("list_parents", list_parents_response,
+                                  expected_list_parents_params)
+        updated_org_mock = self._get_mock_org(accounts=updated_accounts_mock)
+        aws_org_mock = self._get_mock_org(root_parent_id='r-1234')
+        org_mock = self._get_mock_org(aws_model=aws_org_mock, updated_model=updated_org_mock)
+        org_service = self._get_org_service()
+        changes = org_service.move_account(organization=org_mock, account_name="account_a",
+                                           parent_name="root")
+        helpers.print_expected_actual_diff(expected_changes, changes)
+        assert changes == expected_changes
+
+    def test_move_account_orgunit(self):
+        '''
+        Tests OrganizationService.move_account when the parent_name is an orgunit
+        (not "root")
+        '''
+        updated_accounts_mock = {"account_a": {"account_id": "987654321"}}
+        updated_orgunits_mock = {"orgunit_a": {"id": "ou-654321"}}
+        expected_changes = {"changes": "reassociated", "parent": "ou-654321"}
+        list_parents_response = {
+            "Parents": [{"Id": "ou-123456"}]}
+        expected_list_parents_params = {"ChildId": "987654321"}
+        expected_move_account_params = {
+            "AccountId": "987654321", "SourceParentId": "ou-123456",
+            "DestinationParentId": "ou-654321"}
+        self.stubber.add_response("list_parents", list_parents_response,
+                                  expected_list_parents_params)
+        self.stubber.add_response("move_account", {}, expected_move_account_params)
+        updated_org_mock = self._get_mock_org(accounts=updated_accounts_mock,
+                                              orgunits=updated_orgunits_mock)
+        aws_org_mock = self._get_mock_org()
+        org_mock = self._get_mock_org(aws_model=aws_org_mock, updated_model=updated_org_mock)
+        org_service = self._get_org_service()
+        changes = org_service.move_account(organization=org_mock, account_name="account_a",
+                                           parent_name="orgunit_a")
+        helpers.print_expected_actual_diff(expected_changes, changes)
+        assert changes == expected_changes
