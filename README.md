@@ -119,3 +119,7 @@ pipenv run doc-server
 ```
 
 3. Visit https://localhost:8000/ in your browser.
+
+## Acknowledgements
+
+Huge thanks to @jedugas and everyone else on the Stelligent team whose previous work informed this project.
