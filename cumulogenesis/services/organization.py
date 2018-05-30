@@ -88,14 +88,17 @@ class OrganizationService(object):
         to account Name values, for use by load_orgunits in loading the names
         of child accounts.
         '''
-        list_accounts_res = self.client.list_accounts()
-        for account in list_accounts_res['Accounts']:
-            account_model = {"name": account["Name"],
-                             "owner": account["Email"],
-                             "account_id": str(account["Id"]),
-                             "regions": []}
-            organization.accounts[account["Name"]] = account_model
-            organization.account_ids_to_names[account["Id"]] = account["Name"]
+        paginator = self.client.get_paginator('list_accounts')
+        for page in paginator.paginate():
+            logger.debug("list_accounts page response follows")
+            logger.debug(helpers.pretty_format(page))
+            for account in page['Accounts']:
+                account_model = {"name": account["Name"],
+                                 "owner": account["Email"],
+                                 "account_id": str(account["Id"]),
+                                 "regions": []}
+                organization.accounts[account["Name"]] = account_model
+                organization.account_ids_to_names[account["Id"]] = account["Name"]
 
     def upsert_organization(self, organization, actions):
         '''
