@@ -52,6 +52,8 @@ class OrganizationService(object):
         It doesn't return anything useful as it's modifying the provided Organization
         model directly.
         '''
+        logger.debug("Organization model ids_to_children follows.")
+        logger.debug(helpers.pretty_print(organization.ids_to_children))
         for orgunit_id in organization.ids_to_children[organization.root_parent_id]['orgunits']:
             self._load_orgunit(org_model=organization, orgunit_id=orgunit_id)
         self._add_orgunit_children_to_parents(org_model=organization)
