@@ -2,6 +2,7 @@
 Provides the Organization AwsEntity model class
 '''
 import copy
+import time
 from collections import OrderedDict
 from cumulogenesis import exceptions, helpers
 from cumulogenesis.services.session import SessionService
@@ -283,8 +284,10 @@ class Organization(object):
     def reload_orgunits(self, org_service):
         '''
         Reloads the Organization and OrganizationUnit hierarchy in self using
-        the provided OrganizationService
+        the provided OrganizationService after a brief sleep to allow the API
+        to converge.
         '''
+        time.sleep(3)
         self.ids_to_children = {}
         self.orgunits = {}
         org_service.load_organization(self)
@@ -293,15 +296,19 @@ class Organization(object):
     def reload_policies(self, org_service):
         '''
         Reloads Service Control Policies and policy attachments on self using
-        the provided OrganizationService.
+        the provided OrganizationService after a brief sleep to allow the API
+        to converge.
         '''
+        time.sleep(3)
         self.policies = {}
         org_service.load_policies(self)
 
     def reload_accounts(self, org_service):
         '''
-        Reloads accounts on self using the provided OrganizationService.
+        Reloads accounts on self using the provided OrganizationService after a
+        brief sleep to allow the API to converge.
         '''
+        time.sleep(3)
         self.accounts = {}
         org_service.load_accounts(self)
 
