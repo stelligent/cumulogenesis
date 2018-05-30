@@ -351,8 +351,17 @@ class OrganizationService(object):
 
     def _set_org_ids_to_children(self, org_model, parent):
         logger.debug("Enumerating children for parent %s", parent)
-        orgunit_children = self.client.list_children(ParentId=parent,
-                                                     ChildType="ORGANIZATIONAL_UNIT")
+        orgunit_children = {"Children": []}
+        orgunit_paginator = self.client.get_paginator('list_children')
+        list_orgunit_children_params = {
+            "ParentId": parent, "ChildType": "ORGANIZATIONAL_UNIT"}
+        logger.debug("list_children orgunit call params follow")
+        logger.debug(helpers.pretty_format(list_orgunit_children_params))
+        for page in orgunit_paginator.paginate(**list_orgunit_children_params):
+            logger.debug("Page response follows.")
+            logger.debug(helpers.pretty_format(page))
+            if page['Children']:
+                orgunit_children['Children'] += page['Children']
         account_children = self.client.list_children(ParentId=parent,
                                                      ChildType="ACCOUNT")
         logger.debug("orgunit children response follows:")
