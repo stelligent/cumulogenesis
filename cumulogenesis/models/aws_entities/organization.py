@@ -623,10 +623,11 @@ class Organization(object):
             action_to_verb = {"update": "updated", "create": "created",
                               "delete": "deleted"}
             for name, action in report['actions'].get('orgunits', {}).items():
-                orgunit_id = self.updated_model.orgunits[name]['id']
+                changes = {name: {"change": action_to_verb[action["action"]]}}
+                if name in self.updated_model.orgunits:
+                    changes[name]["id"] = self.updated_model.orgunits[name]['id']
                 self._add_changes_to_report(
-                    report=report, change_type='orgunits',
-                    changes={name: {"change": action_to_verb[action["action"]], "id": orgunit_id}})
+                    report=report, change_type='orgunits', changes=changes)
             for name, action in report['actions']['orgunit_associations'].items():
                 self._add_changes_to_report(report=report, change_type='orgunit_associations',
                                             changes={name: {"change": "associated", "parent": action["parent"]}})
