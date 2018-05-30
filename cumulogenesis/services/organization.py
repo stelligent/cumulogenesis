@@ -68,18 +68,20 @@ class OrganizationService(object):
         have already been loaded into the Organization model so that policy
         associations can be loaded into them.
         '''
-        list_policies_res = self.client.list_policies(Filter='SERVICE_CONTROL_POLICY')
-        for policy in list_policies_res['Policies']:
-            policy_document = self._get_policy_document(policy_id=policy['Id'])
-            policy_model = {"name": policy["Name"],
-                            "id": policy["Id"],
-                            "description": policy["Description"],
-                            "aws_managed": policy["AwsManaged"],
-                            "document": {"content": policy_document}}
-            organization.policies[policy["Name"]] = policy_model
-            policy_targets_res = self.client.list_targets_for_policy(PolicyId=policy["Id"])
-            for target in policy_targets_res["Targets"]:
-                self._add_policy_to_target(org_model=organization, target=target, policy_name=policy['Name'])
+        list_policies_paginator = self.client.get_paginator('list_policies')
+        list_targets_for_policy_paginator = self.client.get_paginator('list_targets_for_policy')
+        for page in list_policies_paginator.paginate(Filter='SERVICE_CONTROL_POLICY'):
+            for policy in page['Policies']:
+                policy_document = self._get_policy_document(policy_id=policy['Id'])
+                policy_model = {"name": policy["Name"],
+                                "id": policy["Id"],
+                                "description": policy["Description"],
+                                "aws_managed": policy["AwsManaged"],
+                                "document": {"content": policy_document}}
+                organization.policies[policy["Name"]] = policy_model
+                for targets_page in list_targets_for_policy_paginator.paginate(PolicyId=policy["Id"]):
+                    for target in targets_page["Targets"]:
+                        self._add_policy_to_target(org_model=organization, target=target, policy_name=policy['Name'])
 
     def load_accounts(self, organization):
         '''
