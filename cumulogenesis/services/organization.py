@@ -126,7 +126,13 @@ class OrganizationService(object):
             if policy not in old_policies:
                 logger.info('Adding policy association for %s to target %s', policy, target_id)
                 policy_id = org_model.updated_model.policies[policy]['id']
-                self.client.attach_policy(PolicyId=policy_id, TargetId=target_id)
+                try:
+                    self.client.attach_policy(PolicyId=policy_id, TargetId=target_id)
+                except botocore.exceptions.ClientError as err:
+                    if 'DuplicatePolicyAttachmentException' in str(err):
+                        logger.warning('Policy %s is already attached to target %s', policy, target_id)
+                    else:
+                        raise
         for policy in old_policies:
             if policy not in new_policies:
                 logger.info('Removing policy association for %s to target %s', policy, target_id)
