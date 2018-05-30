@@ -360,7 +360,8 @@ class Organization(object):
         if self.source != "aws":
             raise exceptions.NotAwsModelException('load()')
         self._load_organization()
-        self._load_stacksets()
+        # Not yet implemented
+        #self._load_stacksets()
 
     def _initialize_session_builder(self):
         session_builder_params = {}
@@ -744,6 +745,9 @@ class Organization(object):
             organization_service.load_policies(organization=self)
 
     def _load_stacksets(self):
+        '''
+        Not yet fully implemented
+        '''
         session_builder = self._get_session_builder()
         cloudformation_service = CloudformationService(session_builder=session_builder)
         cloudformation_service.load_stacksets(organization=self)

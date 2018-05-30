@@ -205,26 +205,26 @@ class OrganizationService(object):
         is asynchronous, it waits until each account finishes creating, then
         returns a changes dict for the report.
         '''
-        creation_statuses = {}
+        changes = {}
         for account in accounts:
+            creation_statuses = {}
             logger.info('Creating account %s', account)
             create_account_params = {
                 'Email': organization.accounts[account]['owner'],
                 'AccountName': organization.accounts[account]['name']}
             create_res = self.client.create_account(**create_account_params)
             creation_statuses[account] = create_res['CreateAccountStatus']
-        self._wait_on_account_creation(creation_statuses)
-        changes = {}
-        for account, status in creation_statuses.items():
-            if status['State'] == 'SUCCEEDED':
-                change = 'created'
-            elif status['State'] == 'FAILED':
-                change = 'failed'
-            else:
-                change = 'unknown'
-            changes[account] = {"change": change}
-            if status == 'failed':
-                changes[account]['reason'] = status['FailureReason']
+            self._wait_on_account_creation(creation_statuses)
+            for account_name, status in creation_statuses.items():
+                if status['State'] == 'SUCCEEDED':
+                    change = 'created'
+                elif status['State'] == 'FAILED':
+                    change = 'failed'
+                else:
+                    change = 'unknown'
+                changes[account_name] = {"change": change}
+                if status == 'failed':
+                    changes[account_name]['reason'] = status['FailureReason']
         return changes
 
     def move_account(self, organization, account_name, parent_name):
