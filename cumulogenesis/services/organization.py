@@ -32,6 +32,8 @@ class OrganizationService(object):
             describe_org_response = self.client.describe_organization()
             if not describe_org_response['Organization']:
                 organization.exists = False
+            logger.debug("describe_organization response follows.")
+            logger.debug(helpers.pretty_format(describe_org_response))
         except botocore.exceptions.ClientError:
             logger.info("Got an error trying to describe the organization, assuming organization does not exist.")
             organization.exists = False
@@ -53,7 +55,7 @@ class OrganizationService(object):
         model directly.
         '''
         logger.debug("Organization model ids_to_children follows.")
-        logger.debug(helpers.pretty_print(organization.ids_to_children))
+        logger.debug(helpers.pretty_format(organization.ids_to_children))
         for orgunit_id in organization.ids_to_children[organization.root_parent_id]['orgunits']:
             self._load_orgunit(org_model=organization, orgunit_id=orgunit_id)
         self._add_orgunit_children_to_parents(org_model=organization)
@@ -348,10 +350,15 @@ class OrganizationService(object):
         return root_parents[0]
 
     def _set_org_ids_to_children(self, org_model, parent):
+        logger.debug("Enumerating children for parent %s", parent)
         orgunit_children = self.client.list_children(ParentId=parent,
                                                      ChildType="ORGANIZATIONAL_UNIT")
         account_children = self.client.list_children(ParentId=parent,
                                                      ChildType="ACCOUNT")
+        logger.debug("orgunit children response follows:")
+        logger.debug(helpers.pretty_format(orgunit_children))
+        logger.debug("account children response follows:")
+        logger.debug(helpers.pretty_format(account_children))
         if not parent in org_model.ids_to_children:
             org_model.ids_to_children[parent] = {"accounts": [], "orgunits": []}
         if account_children['Children']:
