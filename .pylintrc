@@ -8,3 +8,4 @@ max-line-length=120
 
 [BASIC]
 method-rgx=[a-z_][a-z0-9_]{2,50}$
+variable-rgx=[a-z_][a-z0-9_]{2,50}$

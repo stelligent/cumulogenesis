@@ -69,6 +69,13 @@ def pretty_print(data, width=120):
     pprinter = pprint.PrettyPrinter(width=width)
     return pprinter.pprint(data)
 
+def pretty_format(data, width=120):
+    '''
+    Wrapper for pprint that allows the line width to be specified.
+    '''
+    pprinter = pprint.PrettyPrinter(width=width)
+    return pprinter.pformat(data)
+
 def _convert_to_dict_if_ordered(item):
     if isinstance(item, OrderedDict):
         item = dict(item)
