@@ -57,7 +57,7 @@ class CloudformationService(object):
         e.g.,
         organization.accounts = {
             "account_a": {
-                "account_id": "123456789",
+                "id": "123456789",
                 "name": "account_a",
                 "regions": {
                     "us-east-1": {},

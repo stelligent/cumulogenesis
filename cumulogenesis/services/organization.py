@@ -97,7 +97,7 @@ class OrganizationService(object):
             for account in page['Accounts']:
                 account_model = {"name": account["Name"],
                                  "owner": account["Email"],
-                                 "account_id": str(account["Id"]),
+                                 "id": str(account["Id"]),
                                  "regions": []}
                 organization.accounts[account["Name"]] = account_model
                 organization.account_ids_to_names[account["Id"]] = account["Name"]
@@ -254,7 +254,7 @@ class OrganizationService(object):
             dest_parent_id = organization.aws_model.root_parent_id
         else:
             dest_parent_id = organization.updated_model.orgunits[parent_name]['id']
-        account_id = organization.updated_model.accounts[account_name]['account_id']
+        account_id = organization.updated_model.accounts[account_name]['id']
         list_parents_res = self.client.list_parents(ChildId=account_id)
         source_parent_id = list_parents_res['Parents'][0]['Id']
         if dest_parent_id != source_parent_id:

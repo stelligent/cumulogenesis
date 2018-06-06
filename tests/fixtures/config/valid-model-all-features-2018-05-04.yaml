@@ -22,7 +22,7 @@ accounts: # list of member accounts to create or invite
       us-east-1: {}
   - name: pre-existing-account
     owner: pre-existing-account-owner@othercompany.com
-    account_id: '987654321'
+    id: '987654321'
     regions:
       us-west-2: {}
 

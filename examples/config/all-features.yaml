@@ -14,7 +14,7 @@ accounts:
     owner: organization-master@your-organization.com # DUMMY
     # The account ID must be specified for any existing account that shouldn't be created
     # automatically for the organization, including the organization master account.
-    account_id: 123456789 # DUMMY
+    id: 123456789 # DUMMY
     regions: {} # While regions is a required parameter for accounts, it isn't yet fully implemented.
   - name: security # DUMMY
     owner: security@your-organization.com # DUMMY
