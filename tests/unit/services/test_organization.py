@@ -296,7 +296,7 @@ class TestOrganizationService(unittest.TestCase):
         expected_accounts = {
             "account_a": {
                 "name": "account_a", "owner": "foo@bar.com",
-                "account_id": "123456789", "regions": []}}
+                "id": "123456789", "regions": []}}
         expected_account_ids_to_names = {
             "123456789": "account_a"}
         org_mock = self._get_mock_org(accounts={}, account_ids_to_names={})
@@ -631,7 +631,7 @@ class TestOrganizationService(unittest.TestCase):
         '''
         Tests OrganizationService.move_account when the parent_name is root
         '''
-        updated_accounts_mock = {"account_a": {"account_id": "987654321"}}
+        updated_accounts_mock = {"account_a": {"id": "987654321"}}
         expected_changes = {"changes": "reassociated", "parent": "r-1234"}
         list_parents_response = {
             "Parents": [{"Id": "ou-123456"}]}
@@ -655,7 +655,7 @@ class TestOrganizationService(unittest.TestCase):
         '''
         Tests OrganizationService.move_account when the source and destination IDs match
         '''
-        updated_accounts_mock = {"account_a": {"account_id": "987654321"}}
+        updated_accounts_mock = {"account_a": {"id": "987654321"}}
         expected_changes = {}
         list_parents_response = {
             "Parents": [{"Id": "r-1234"}]}
@@ -676,7 +676,7 @@ class TestOrganizationService(unittest.TestCase):
         Tests OrganizationService.move_account when the parent_name is an orgunit
         (not "root")
         '''
-        updated_accounts_mock = {"account_a": {"account_id": "987654321"}}
+        updated_accounts_mock = {"account_a": {"id": "987654321"}}
         updated_orgunits_mock = {"orgunit_a": {"id": "ou-654321"}}
         expected_changes = {"changes": "reassociated", "parent": "ou-654321"}
         list_parents_response = {

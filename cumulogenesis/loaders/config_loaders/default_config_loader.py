@@ -164,8 +164,8 @@ class DefaultConfigLoader(object):
             self._validate_each_parameter(config=account, parent='account',
                                           parameters=self._account_parameters)
             account_parameters = copy.deepcopy(account)
-            if 'account_id' in account_parameters:
-                account_parameters['account_id'] = str(account_parameters['account_id'])
+            if 'id' in account_parameters:
+                account_parameters['id'] = str(account_parameters['id'])
             account_parameters['source'] = 'config'
             accounts.append(account_parameters)
         accounts_by_name = self._list_to_dict_by_names(accounts, 'account')
@@ -244,7 +244,7 @@ class DefaultConfigLoader(object):
         accounts_list = []
         attribute_map = {"name": "name",
                          "owner": "owner",
-                         "account_id": "account_id",
+                         "id": "id",
                          "regions": "regions",
                          "policies": "policies"}
         for account in accounts.values():

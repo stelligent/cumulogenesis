@@ -89,7 +89,7 @@ class Organization(object):
 
     ```
     {
-        "account_id": str(account_id),
+        "id": str(account_id),
         "name": str(account_name),
         "owner": str(account_owner),
         "parent_references": [str(orgunit_name), ...]
@@ -101,7 +101,7 @@ class Organization(object):
     ```
 
 
-    - `account_id`: The AWS ID of the Account. If loaded from configuration, this
+    - `id`: The AWS ID of the Account. If loaded from configuration, this
     indicates that the Account should already exist and should be invited to the
     Organization rather than being created as a new member. Will always exist when
     loading the model from AWS.
@@ -408,7 +408,7 @@ class Organization(object):
     def _compare_accounts(self, report):
         for account in self.accounts:
             if not account in self.aws_model.accounts:
-                action = 'invite' if 'account_id' in self.accounts[account] else 'create'
+                action = 'invite' if 'id' in self.accounts[account] else 'create'
                 self._add_action_to_report(
                     report=report, entity_type='accounts', entity_name=account,
                     action=action)
@@ -471,7 +471,7 @@ class Organization(object):
 
     def _compare_account_associations(self, report):
         for account in self.accounts:
-            if self.accounts[account].get('account_id', None) == self.root_account_id:
+            if self.accounts[account].get('id', None) == self.root_account_id:
                 continue
             # If the account hasn't yet been created in the AWS model,
             # add an association entry demonstrating where it should be located
@@ -495,7 +495,7 @@ class Organization(object):
         # will be added to report['aws_model_problems'] to indicate that the account
         # will be orphaned.
         for account in self.aws_model.accounts:
-            if self.aws_model.accounts[account]['account_id'] == self.root_account_id:
+            if self.aws_model.accounts[account]['id'] == self.root_account_id:
                 continue
             if account not in self.accounts:
                 aws_parent = self._get_association_for_account(self.aws_model, account)
@@ -795,7 +795,7 @@ class Organization(object):
     def _validate_account(self, account_name):
         problems = []
         account = self.accounts[account_name]
-        if not account['parent_references'] and not account.get('account_id', None) == self.root_account_id:
+        if not account['parent_references'] and not account.get('id', None) == self.root_account_id:
             problems.append('orphaned')
         elif len(account['parent_references']) > 1:
             #pylint: disable=line-too-long
@@ -865,6 +865,6 @@ class Organization(object):
         for account in self.accounts.values():
             # We specifically want to check that parent_references is 0 and not None
             #pylint: disable=len-as-condition
-            if len(account['parent_references']) == 0 and not account.get('account_id', None) == self.root_account_id:
+            if len(account['parent_references']) == 0 and not account.get('id', None) == self.root_account_id:
                 orphaned_accounts.append(account['name'])
         return orphaned_accounts
