@@ -38,7 +38,7 @@ generate:
 pages:
 - Home: index.md << ../README.md
 - AwsEntities:
-  - Organization: cumulogenesis/aws_entities/organization.md
+  - Organization: cumulogenesis/models/aws_entities/organization.md
 - Exceptions: cumulogenesis/exceptions.md
 - Helpers: cumulogenesis/helpers.md
 - Loaders:
