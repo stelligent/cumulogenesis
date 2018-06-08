@@ -1,0 +1,34 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "Stmt1528466574263",
+            "Action": [
+                "organizations:CreateAccount",
+                "organizations:CreateOrganization",
+                "organizations:CreatePolicy",
+                "organizations:DescribeCreateAccountStatus",
+                "organizations:DescribeOrganization",
+                "organizations:ListAccounts",
+                "organizations:ListChildren",
+                "organizations:ListParents",
+                "organizations:ListPolicies",
+                "organizations:AttachPolicy",
+                "organizations:CreateOrganizationalUnit",
+                "organizations:DeleteOrganizationalUnit",
+                "organizations:DescribeOrganizationalUnit",
+                "organizations:DetachPolicy",
+                "organizations:EnablePolicyType",
+                "organizations:ListPoliciesForTarget",
+                "organizations:ListTargetsForPolicy",
+                "organizations:MoveAccount",
+                "organizations:UpdateOrganizationalUnit",
+                "organizations:DeletePolicy",
+                "organizations:DescribePolicy",
+                "organizations:UpdatePolicy"
+            ],
+            "Effect": "Allow",
+            "Resource": "*"
+        }
+    ]
+}

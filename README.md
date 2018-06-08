@@ -70,6 +70,12 @@ optional arguments:
                         DEBUG, INFO, WARNING, ERROR, CRITICAL
 ```
 
+## Recommended IAM Policy
+
+Running Cumulogenesis will require some permissions on your AWS account. Below are the minimum requirements for the full feature set of this software.
+
+See [the example IAM Policy to use Cumulogenesis](examples/aws/iam-policy.json).
+
 ## Opinionated Features
 
 ### Account regions
