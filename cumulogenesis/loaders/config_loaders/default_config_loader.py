@@ -33,15 +33,6 @@ class DefaultConfigLoader(object):
                             'default': ['FullAWSAccess']},
                            {'name': 'accounts', 'type': list, 'optional': True},
                            {'name': 'orgunits', 'type': list, 'optional': True}]
-    _stack_parameters = [{'name': 'name', 'type': str},
-                         {'name': 'accounts', 'type': list, 'optional': True},
-                         {'name': 'orgunits', 'type': list, 'optional': True}]
-    _stack_target_parameters = [{'name': 'name', 'type': str},
-                                {'name': 'regions', 'type': list}]
-    _stack_template_parameters = [{'name': 'location', 'type': str},
-                                  {'name': 'content', 'type': dict}]
-    _default_provisioner_template = {"role": "org-bootstrapper",
-                                     "type": "cfn-stack-set"}
 
     def __init__(self):
         self.config_version = '2018-05-04'
@@ -65,8 +56,6 @@ class DefaultConfigLoader(object):
         if organization.orgunits:
             config['orgunits'] = self._render_orgunits(organization.orgunits,
                                                        organization.get_orgunit_hierarchy())
-        if organization.stacks:
-            config['stacks'] = self._render_stacks(organization.stacks)
         return config
 
     def load_organization_from_config(self, config):
@@ -86,18 +75,12 @@ class DefaultConfigLoader(object):
         else:
             logger.info('featureset parameter not present on organization, assuming "ALL"')
             organization.featureset = self._default_featureset
-        if 'provisioner' in config:
-            organization.provisioner = self._load_provisioner(config['provisioner'])
-        else:
-            organization.provisioner = self._load_provisioner(None)
         if 'accounts' in config:
             organization.accounts = self._load_accounts(config['accounts'])
         if 'policies' in config:
             organization.policies = self._load_policies(config['policies'])
         if 'orgunits' in config:
             organization.orgunits = self._load_orgunits(config['orgunits'])
-        if 'stacks' in config:
-            organization.stacks = self._load_stacks(config['stacks'])
         return organization
 
     @staticmethod
@@ -144,19 +127,6 @@ class DefaultConfigLoader(object):
             else:
                 dict_by_names[item['name']] = item
         return dict_by_names
-
-    def _load_provisioner(self, config):
-        if not config:
-            logger.info('No provisioner configuration provided, initializing with defaults.')
-            return copy.deepcopy(self._default_provisioner_template)
-        else:
-            if 'role' in config:
-                self._validate_is_type(config=config, parameter='role', parent='provisioner',
-                                       expected_type=str)
-            if 'type' in config:
-                self._validate_is_type(config=config, parameter='type', parent='provisioner',
-                                       expected_type=str)
-            return config
 
     def _load_accounts(self, config):
         accounts = []
@@ -206,24 +176,6 @@ class DefaultConfigLoader(object):
         orgunits = self._load_orgunits_from_orgunit(config)
         orgunits_by_name = self._list_to_dict_by_names(orgunits, 'orgunit')
         return orgunits_by_name
-
-    def _load_stacks(self, config):
-        stacks = []
-        for stack in config:
-            self._validate_each_parameter(config=stack, parent='stack',
-                                          parameters=self._stack_parameters)
-            self._validate_one_of_parameters(config=stack['template'], parent='stack.template',
-                                             parameters=self._stack_template_parameters)
-            for key in ['accounts', 'orgunits']:
-                if key in config:
-                    target_name = 'stack.%s' % key
-                    self._validate_each_parameter(config=stack, parent=target_name,
-                                                  parameters=self._stack_target_parameters)
-            stack_parameters = copy.deepcopy(stack)
-            stack_parameters['source'] = 'config'
-            stacks.append(stack)
-        stacks_by_name = self._list_to_dict_by_names(stacks, 'stack')
-        return stacks_by_name
 
     @staticmethod
     def _render_from_map(source, attribute_map):
@@ -288,13 +240,3 @@ class DefaultConfigLoader(object):
                                                         orgunits)
                 rendered_orgunits.append(rendered_orgunit)
         return rendered_orgunits
-
-    def _render_stacks(self, stacks):
-        stacks_list = []
-        attribute_map = {"name": "name",
-                         "accounts": "accounts",
-                         "orgunits": "orgunits",
-                         "template": "template"}
-        for stack in stacks.values():
-            stacks_list.append(self._render_from_map(source=stack, attribute_map=attribute_map))
-        return stacks_list

@@ -167,7 +167,7 @@ class Organization(object):
         self.orgunits = {}
         self.orgunit_ids_to_names = {}
         self.ids_to_children = {}
-        self.provisioner = None
+        self.provisioner = {}
         self.raw_config = None
         self.session_builder = None
         self.source = source
