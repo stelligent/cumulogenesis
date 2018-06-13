@@ -137,22 +137,15 @@ class TestOrganization(unittest.TestCase):
             "orphaned_account": {"parent_references": None, "regions": ["us-east-1"]},
             "multiple_references": {"parent_references": None, "regions": ["us-east-1"]},
             "valid_account_a": {"parent_references": None, "regions": ["us-east-1"]}}
-        stacks_mock = {
-            "missing_account": {"accounts": ["nonexistent"], "orgunits": []},
-            "missing_orgunit": {"accounts": [], "orgunits": ["nonexistent"]},
-            "valid_stack_a": {"accounts": ["valid_account_a"], "orgunits": []}}
         org = self._get_base_organization()
         org.orgunits = self._add_name_to_entity_mocks(orgunits_mock)
         org.accounts = self._add_name_to_entity_mocks(accounts_mock)
-        org.stacks = self._add_name_to_entity_mocks(stacks_mock)
         expected_problems = {'orgunits': {'missing_account': ['references missing account nonexistent'],
                                           'missing_orgunit': ['references missing child orgunit nonexistent'],
                                           'missing_policy': ['references missing policy nonexistent']},
                              'accounts': {'orphaned_account': ['orphaned'],
                                           #pylint: disable=line-too-long
-                                          'multiple_references': ['referenced as a child of multiple orgunits: valid_ou_a, valid_ou_b']},
-                             'stacks': {'missing_account': ['references missing account nonexistent'],
-                                        'missing_orgunit': ['references missing orgunit nonexistent']}}
+                                          'multiple_references': ['referenced as a child of multiple orgunits: valid_ou_a, valid_ou_b']}}
         problems = org.validate()
         helpers.print_expected_actual_diff(expected_problems, problems)
         assert expected_problems == problems

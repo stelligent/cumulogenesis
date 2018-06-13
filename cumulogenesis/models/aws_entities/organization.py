@@ -7,7 +7,6 @@ from collections import OrderedDict
 from cumulogenesis import exceptions, helpers
 from cumulogenesis.services.session import SessionService
 from cumulogenesis.services.organization import OrganizationService
-from cumulogenesis.services.cloudformation import CloudformationService
 from cumulogenesis.log_handling import LOGGER as logger
 
 # pylint: disable=too-many-instance-attributes
@@ -32,12 +31,6 @@ class Organization(object):
     This must be supplied to `__init__` when the model is instantiated.
     - `root_policies`: A list of Service Control Policies that are applied to
     the Organization's root.
-    - `stacks`: The stack resources that should exist in the Organization, represented
-    as a dict of stack names to dicts representing the stack resources. See Stack
-    below.
-    - `stack_instances`: The stack instances that should exist per account/region,
-    represented as a list of dicts representing the stack instances. See Stack Instance
-    below.
 
     ##### Additional attributes
 
@@ -65,7 +58,6 @@ class Organization(object):
         to member accounts.
         - `secret_key`: The AWS IAM Secret Key to be used when creatinb `boto3` sessions.
         Requires `access_key` to also be specified.
-        - `type`: The Stack provisioner engine to use. Defaults to cfn-stack-set.
     - `raw_config`: An OrderedDict representation of the config passed if the Organization
     model was initialized from configuration.
     - `root_parent_id`: The ID of the Organization's root. Generated when loading an
@@ -112,13 +104,7 @@ class Organization(object):
     structure such as orphaned Accounts or multiple Orgunits claiming the same Account
     as a child.
     - `policies`: A list of Policy names that target the Account.
-    - `regions`: A dict of AWS region names to region configuration. Represents
-    the regions in which all Stack resources targeting the account should have
-    Stack Instances created. Keys of the region dicts follow:
-        - `parameters`: A dict of parameter names to parameter values. A Parameter
-        Store parameter should be created in the region's parameter Stack Instance
-        for each member of this dict. The parameter value may be any type accepted by
-        Parameter Store.
+    - `regions`: A dict of AWS region names to region configuration.
 
     ##### Orgunit
 
@@ -165,14 +151,6 @@ class Organization(object):
         - `content`: An OrderedDict representing the contents of the Policy document.
     - `id`: The AWS ID of the Policy.
     - `name`: The name of the Policy.
-
-    ##### Stacks
-
-    A dict representing a Stack resource. Not yet fully implemented.
-
-    ##### Stack Instance
-
-    A dict representing an instance of a Stack resource. Not yet fully implemented.
     '''
 
     _comparable_account_attributes = ['name', 'policies']
@@ -189,7 +167,6 @@ class Organization(object):
         self.orgunits = {}
         self.orgunit_ids_to_names = {}
         self.ids_to_children = {}
-        self.stacks = {}
         self.provisioner = None
         self.raw_config = None
         self.session_builder = None
@@ -345,9 +322,6 @@ class Organization(object):
         account_problems = self._validate_accounts()
         if account_problems:
             problems['accounts'] = account_problems
-        stack_problems = self._validate_stacksets()
-        if stack_problems:
-            problems['stacks'] = stack_problems
         return problems
 
     def initialize_aws_model(self):
@@ -367,8 +341,6 @@ class Organization(object):
         if self.source != "aws":
             raise exceptions.NotAwsModelException('load()')
         self._load_organization()
-        # Not yet implemented
-        #self._load_stacksets()
 
     def _initialize_session_builder(self):
         session_builder_params = {}
@@ -752,14 +724,6 @@ class Organization(object):
             organization_service.load_orgunits(organization=self)
             organization_service.load_policies(organization=self)
 
-    def _load_stacksets(self):
-        '''
-        Not yet fully implemented
-        '''
-        session_builder = self._get_session_builder()
-        cloudformation_service = CloudformationService(session_builder=session_builder)
-        cloudformation_service.load_stacksets(organization=self)
-
     def _initialize_account_parent_references(self):
         for account_name in self.accounts:
             self.accounts[account_name]['parent_references'] = []
@@ -809,25 +773,6 @@ class Organization(object):
             account_problems = self._validate_account(account_name)
             if account_problems:
                 problems[account_name] = account_problems
-        return problems
-
-    def _validate_stackset(self, stackset_name):
-        problems = []
-        stackset = self.stacks[stackset_name]
-        for account in stackset.get('accounts', []):
-            if not account in self.accounts:
-                problems.append('references missing account %s' % account)
-        for orgunit in stackset.get('orgunits', []):
-            if not orgunit in self.orgunits:
-                problems.append('references missing orgunit %s' % orgunit)
-        return problems
-
-    def _validate_stacksets(self):
-        problems = {}
-        for stackset_name in self.stacks:
-            stackset_problems = self._validate_stackset(stackset_name)
-            if stackset_problems:
-                problems[stackset_name] = stackset_problems
         return problems
 
     def _append_path(self, root, orgunit_name):
