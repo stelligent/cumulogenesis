@@ -4,11 +4,8 @@
 root: 123456789 # DUMMY; the account ID of the account that should be the Organization master
 featureset: ALL # The feature set to enable on the organization. This can be any value accepted by CreateOrganization
 version: 2018-05-04
-provisioner:
-  profile: cumulogenesis # DUMMY; the name of the AWS CLI profile to use, optional
 accounts:
   # The organization master account doesn't need to be explicitly defined as below
-  # unless you wish to target it with policies or stack resources.
   - name: organization_master # DUMMY
     # The account owner email address for each account must be unique and not used by any other AWS account
     owner: organization-master@your-organization.com # DUMMY
