@@ -35,7 +35,8 @@ class DefaultConfigLoader(object):
                            {'name': 'orgunits', 'type': list, 'optional': True}]
     _stack_parameters = [{'name': 'name', 'type': str},
                          {'name': 'accounts', 'type': list, 'optional': True},
-                         {'name': 'orgunits', 'type': list, 'optional': True}]
+                         {'name': 'orgunits', 'type': list, 'optional': True},
+                         {'name': 'parameters', 'type': dict, 'optional': True}]
     _stack_target_parameters = [{'name': 'name', 'type': str},
                                 {'name': 'regions', 'type': list}]
     _stack_template_parameters = [{'name': 'location', 'type': str},
@@ -214,7 +215,7 @@ class DefaultConfigLoader(object):
                                           parameters=self._stack_parameters)
             self._validate_one_of_parameters(config=stack['template'], parent='stack.template',
                                              parameters=self._stack_template_parameters)
-            for key in ['accounts', 'orgunits']:
+            for key in ['accounts', 'orgunits', 'parameters']:
                 if key in config:
                     target_name = 'stack.%s' % key
                     self._validate_each_parameter(config=stack, parent=target_name,
@@ -294,7 +295,8 @@ class DefaultConfigLoader(object):
         attribute_map = {"name": "name",
                          "accounts": "accounts",
                          "orgunits": "orgunits",
-                         "template": "template"}
+                         "template": "template",
+                         "parameters": "parameters"}
         for stack in stacks.values():
             stacks_list.append(self._render_from_map(source=stack, attribute_map=attribute_map))
         return stacks_list

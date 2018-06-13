@@ -1,0 +1,27 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "AWS CloudFormation Example Template to launch an ECS Cluster.",
+
+  "Parameters" : {
+    "ClusterName": {
+      "Type": "String"
+    }
+  },
+
+  "Resources" : {
+    "ECSCluster": {
+      "Type" : "AWS::ECS::Cluster",
+      "Properties" : {
+        "ClusterName" : { "Ref": "ClusterName" }
+      }
+    }
+  },
+
+  "Outputs" : {
+    "ClusterArn" : {
+      "Value" : { "Fn::GetAtt": ["ECSCluster", "Arn"]},
+      "Description" : "ECS Cluster ARN"
+    }
+  }
+}

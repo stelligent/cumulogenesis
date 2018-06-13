@@ -6,6 +6,10 @@ featureset: ALL # The feature set to enable on the organization. This can be any
 version: 2018-05-04
 provisioner:
   profile: cumulogenesis # DUMMY; the name of the AWS CLI profile to use, optional
+stacks:
+  - name: example-template
+    template: examples/aws/cloudformation.json
+    accounts: ['organization_master', 'security']
 accounts:
   # The organization master account doesn't need to be explicitly defined as below
   # unless you wish to target it with policies or stack resources.
@@ -15,10 +19,16 @@ accounts:
     # The account ID must be specified for any existing account that shouldn't be created
     # automatically for the organization, including the organization master account.
     id: 123456789 # DUMMY
-    regions: {} # While regions is a required parameter for accounts, it isn't yet fully implemented.
+    regions:
+      us-east-1:
+        parameters:
+          ClusterName: OrgMaster-ECSCluster-East
   - name: security # DUMMY
     owner: security@your-organization.com # DUMMY
-    regions: {}
+    regions:
+      us-west-2:
+        parameters:
+          ClusterName: OrgSecurity-ECSCluster-West
   - name: app-prod # DUMMY
     owner: app-prod@your-organization.com # DUMMY
     regions: {}
